@@ -10,8 +10,81 @@ mjvOption opt;     // visualization options
 mjvScene scn;      // abstract scene
 mjrContext con;    // custom GPU context
 
+static bool mouse_left = false;
+static bool mouse_right = false;
+static bool mouse_middle = false;
+static double lastx = 0.0;
+static double lasty = 0.0;
 
-// TODO: need to figure out way to make cam configurable to view multiple robots properly
+
+static double envOrDefault(const char *name, double fallback)
+{
+    const char *val = std::getenv(name);
+    if (!val || !*val)
+    {
+        return fallback;
+    }
+
+    char *end = nullptr;
+    double parsed = std::strtod(val, &end);
+    return (end == val) ? fallback : parsed;
+}
+
+static void configureCameraForModel(const mjModel *model, mjvCamera *camera)
+{
+    const double extent = mju_max(model->stat.extent, 1e-3);
+
+    camera->lookat[0] = model->stat.center[0];
+    camera->lookat[1] = model->stat.center[1];
+    camera->lookat[2] = model->stat.center[2];
+
+    camera->distance = envOrDefault("MJ_CAM_DISTANCE", 1.5 * extent);
+    camera->azimuth = envOrDefault("MJ_CAM_AZIMUTH", 90.0);
+    camera->elevation = envOrDefault("MJ_CAM_ELEVATION", -45.0);
+}
+
+static void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+{
+    (void)mods;
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT)
+        mouse_left = (action == GLFW_PRESS);
+    else if (button == GLFW_MOUSE_BUTTON_MIDDLE)
+        mouse_middle = (action == GLFW_PRESS);
+    else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+        mouse_right = (action == GLFW_PRESS);
+
+    if (mouse_left || mouse_middle || mouse_right)
+        glfwGetCursorPos(window, &lastx, &lasty);
+}
+
+static void mouse_move_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (!mouse_left && !mouse_middle && !mouse_right)
+        return;
+
+    double dx = xpos - lastx;
+    double dy = ypos - lasty;
+    lastx = xpos;
+    lasty = ypos;
+
+    int width = 1, height = 1;
+    glfwGetWindowSize(window, &width, &height);
+    double scale = (height > 0) ? 1.0 / height : 1.0;
+
+    if (mouse_left)
+        mjv_moveCamera(m, mjMOUSE_ROTATE_H, scale * dx, scale * dy, &scn, &cam);
+    else if (mouse_right)
+        mjv_moveCamera(m, mjMOUSE_MOVE_H, scale * dx, scale * dy, &scn, &cam);
+    else if (mouse_middle)
+        mjv_moveCamera(m, mjMOUSE_ZOOM, scale * dx, scale * dy, &scn, &cam);
+}
+
+static void scroll_callback(GLFWwindow * /*window*/, double /*xoffset*/, double yoffset)
+{
+    mjv_moveCamera(m, mjMOUSE_ZOOM, 0.0, -0.05 * yoffset, &scn, &cam);
+}
+
 int main()
 {
     printf("MuJoCo version: %d\n", mj_version());
@@ -35,11 +108,13 @@ int main()
     GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, mouse_move_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     // initialize visualization data structures
     mjv_defaultCamera(&cam);
-    cam.distance = 5.0;
-    cam.elevation = -50;  
+    configureCameraForModel(m, &cam);
     mjv_defaultOption(&opt);
     mjv_defaultScene(&scn);
     mjr_defaultContext(&con);

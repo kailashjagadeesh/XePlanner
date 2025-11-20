@@ -1,3 +1,0 @@
-/home/oberton/XePlanner/build/CMakeFiles/XePlanner.dir
-/home/oberton/XePlanner/build/CMakeFiles/edit_cache.dir
-/home/oberton/XePlanner/build/CMakeFiles/rebuild_cache.dir
