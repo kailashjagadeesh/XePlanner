@@ -2,13 +2,16 @@ This repo is for the course project for 16-782: Planning and Decision Making in 
 The project is to experiment with planners for multi-manipulator actions.
 
 
-Install:
+Install (Tested on Ubuntu 22.04):
+```
 wget https://github.com/google-deepmind/mujoco/releases/download/3.3.7/mujoco-3.3.7-linux-x86_64.tar.gz
 tar -xvf mujoco-3.3.7-linux-x86_64.tar.gz
 sudo mv mujoco-3.3.7 /usr/local/mujoco 
 echo "/usr/local/mujoco/lib" | sudo tee /etc/ld.so.conf.d/mujoco.conf
 sudo ldconfig
 
+sudo apt install libglfw3 libglfw3-dev
+```
 
 
 Franka Panda Model Adapated From:
