@@ -1,2 +1,15 @@
 This repo is for the course project for 16-782: Planning and Decision Making in Robotics, course by Maxim Likhachev @ Carnegie Mellon University during the fall semester of 2025.
 The project is to experiment with planners for multi-manipulator actions.
+
+
+Install:
+wget https://github.com/google-deepmind/mujoco/releases/download/3.3.7/mujoco-3.3.7-linux-x86_64.tar.gz
+tar -xvf mujoco-3.3.7-linux-x86_64.tar.gz
+sudo mv mujoco-3.3.7 /usr/local/mujoco 
+echo "/usr/local/mujoco/lib" | sudo tee /etc/ld.so.conf.d/mujoco.conf
+sudo ldconfig
+
+
+
+Franka Panda Model Adapated From:
+https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_emika_panda
