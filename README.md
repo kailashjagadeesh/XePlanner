@@ -1,0 +1,2 @@
+This repo is for the course project for 16-782: Planning and Decision Making in Robotics, course by Maxim Likhachev @ Carnegie Mellon University during the fall semester of 2025.
+The project is to experiment with planners for multi-manipulator actions.
