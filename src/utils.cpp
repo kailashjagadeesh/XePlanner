@@ -111,7 +111,7 @@ vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps,
 
     for (int s = 0; s <= steps; s++)
     {
-        Node* waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t * s * dt);
+        Node* waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t + s * dt);
         trajectory[s] = waypoint;
     }
 
