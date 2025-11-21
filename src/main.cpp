@@ -5,6 +5,7 @@
 #include "utils.h"
 #include <stdexcept> 
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
 
@@ -23,9 +24,10 @@ static double lasty = 0.0;
 static bool print_collisions = false;
 static bool last_collision = false;
 
-static const double start_pose[7] = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
 
 static const int num_actuators = 4;
+static const double dt = 0.01;
 static const double dq_max = 3.142; // rad / s
 
 static double envOrDefault(const char *name, double fallback)
@@ -98,7 +100,6 @@ static void scroll_callback(GLFWwindow * /*window*/, double /*xoffset*/, double 
 
 int main()
 {
-    printf("MuJoCo version: %d\n", mj_version());
     char error[1000] = "Could Not Load Scene";
     m = mj_loadXML("../franka_emika_panda/scene.xml", nullptr, error, sizeof(error));
 
@@ -142,30 +143,29 @@ int main()
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
-    vector<double> start_pose_v(start_pose, start_pose + 7);
-    vector<double> end_pose  = {1, -0.2, 1, -2.2, 0.5, 1.0, -1}; // just makign this up
+    vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
-    // some wierd copying going on
-    vector<vector<double>> end_poses(num_actuators, end_pose);
-    vector<vector<double>> start_poses(num_actuators, start_pose_v);
+    vector<Waypoint> mid_poses(num_actuators, Waypoint(end_pose, 1.0));
+    vector<Waypoint> start_poses(num_actuators, Waypoint(start_pose, 0));
+    vector<Waypoint> end_poses(num_actuators, Waypoint(start_pose, 2.0));
 
 
-    // TODO: put planner here
-    vector<vector<vector<double>>> plan(num_actuators);
+    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
+    // INPUT: vector<vector<Waypoint>> -> dim(num_arms, num_waypoints)
+
+    vector<vector<Waypoint>> plan(num_actuators);
+    // --------------------------------------------------------------------------------------- //
 
     // For each arm, add its sequence of waypoints
     for (int arm = 0; arm < num_actuators; ++arm) {
-        plan[arm].push_back(start_poses[arm]); // start
-        plan[arm].push_back(end_poses[arm]);   // end
+        plan[arm].push_back(start_poses[arm]);
+        plan[arm].push_back(mid_poses[arm]);
+        plan[arm].push_back(end_poses[arm]);
     }
-    double dt = m->opt.timestep;
-    cout << dt << endl;
-    auto dense_plan = densifyPlan(plan, dt, dq_max); // this function will densify the plan so that the max change in positions is less than dq
 
-    int t = 0;
-    int T = dense_plan[0].size();
-    int dof = dense_plan[0][0].size();
+    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
 
+    int dof = dense_plan[0][0].q.size();
 
     // map arm, joint to location to control data index
     vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
@@ -179,25 +179,21 @@ int main()
         }
     }
 
-    // run main loop, target real-time simulation and 60 fps rendering
     while (!glfwWindowShouldClose(window))
     {
-        mj_step1(m, d); 
+        mj_step1(m, d);
+        double t_sim = d->time;
+
+        int t = static_cast<int>(t_sim / dt);
         for (int arm = 0; arm < num_actuators; arm++)
         {
             for (int j = 0; j < dof; j++)
             {
                 int id = act_id[arm][j];
-                d->ctrl[id] = dense_plan[arm][t][j]; // mujoco will use PD control by default
+                d->ctrl[id] = dense_plan[arm][min(t, static_cast<int>(dense_plan[arm].size())-1)].q[j]; // mujoco will use PD control by default
             }
         }
         mj_step2(m, d);
-
-        if (++t == T)
-        { 
-            // instead of break, make this stay at the last pose
-            break;
-        }
 
         bool collision = hasCollision(m, d, print_collisions);
         if (!print_collisions && collision && !last_collision)
@@ -207,18 +203,11 @@ int main()
 
         last_collision = collision;
 
-        // get framebuffer viewport
         mjrRect viewport = {0, 0, 0, 0};
         glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
-
-        // update scene and render
         mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
         mjr_render(viewport, &scn, &con);
-
-        // swap OpenGL buffers (blocking call due to v-sync)
         glfwSwapBuffers(window);
-
-        // process pending GUI events, call GLFW callbacks
         glfwPollEvents();
     }
 

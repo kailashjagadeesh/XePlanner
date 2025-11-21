@@ -1,7 +1,8 @@
 #include "utils.h"
 #include <iostream>
 using namespace std;
-void setArmActuatorTargets(mjModel *model, mjData *data, const double target_pose[])
+
+void setArmActuatorTargets(mjModel *model, mjData *data, const vector<double> &target_pose)
 {
     // Sets the position targets of all arm actuators
     const char *arm_actuators[][7] = {
@@ -60,7 +61,7 @@ void setGrippersOpen(mjModel *model, mjData *data)
     }
 }
 
-void setArmsStartPose(mjModel *model, mjData *data, const double start_pose[])
+void setArmsStartPose(mjModel *model, mjData *data, const vector<double> &start_pose)
 {
     const char *arm_joints[][7] = {
         {"panda1_joint1", "panda1_joint2", "panda1_joint3", "panda1_joint4", "panda1_joint5", "panda1_joint6", "panda1_joint7"},
@@ -101,34 +102,36 @@ bool hasCollision(const mjModel *model, const mjData *data, bool print_collision
     return false;
 }
 
-vector<vector<double>> linearInterpolation(const vector<double> &start, const vector<double> &end, int steps)
+vector<Waypoint> linearInterpolation(const Waypoint &start, const Waypoint &end, int steps, double dt)
 {
-    vector<vector<double>> trajectory;
-    int dof = start.size();
+    vector<Waypoint> trajectory;
+    int dof = start.q.size();
 
     vector<double> dq(dof, 0.0);
 
     for (int i = 0; i < dof; i++)
     {
-        dq[i] = (end[i] - start[i]) / static_cast<double>(steps);
+        dq[i] = (end.q[i] - start.q[i]) / static_cast<double>(steps);
     }
 
     for (int s = 0; s <= steps; s++)
     {
-        vector<double> pose(dof, 0.0);
+        vector<double> q(dof, 0);
         for (int i = 0; i < dof; i++)
         {
-            pose[i] = start[i] + dq[i] * s;
+            q[i] = start.q[i] + dq[i] * s;
         }
+        Waypoint pose(q, start.time + dt * s);
         trajectory.push_back(move(pose));
     }
     return trajectory;
 }
 
-vector<vector<vector<double>>> densifyPlan(const vector<vector<vector<double>>> &waypoints, double dt, double dq_max)
+// List of waypoints, dim: (num arms, plan length)
+vector<vector<Waypoint>> densifyPlan(const vector<vector<Waypoint>> &waypoints, double dt_sim)
 {
     int num_arms = waypoints.size();
-    vector<vector<vector<double>>> interpolated_plan;
+    vector<vector<Waypoint>> interpolated_plan;
     interpolated_plan.resize(num_arms);
 
     for (int arm = 0; arm < num_arms; ++arm)
@@ -136,30 +139,27 @@ vector<vector<vector<double>>> densifyPlan(const vector<vector<vector<double>>> 
         const auto &arm_waypoints = waypoints[arm];
         int M = arm_waypoints.size();
 
-        // Only one waypoint: nothing to interpolate
         if (M == 1)
         {
             interpolated_plan[arm].push_back(arm_waypoints[0]);
             continue;
         }
 
-        // Build full plan for this arm
         for (int s = 0; s < M - 1; ++s)
         {
-            const auto &q0 = arm_waypoints[s];
-            const auto &q1 = arm_waypoints[s + 1];
-            int dof = q0.size();
+            const auto &waypoint0 = arm_waypoints[s];
+            const auto &waypoint1 = arm_waypoints[s+1];
 
-            int steps = 1;
-            for (int j = 0; j < dof; j++)
-            {
-                double delta = fabs(q1[j] - q0[j]);
-                double max_step = dq_max * dt;
-                steps = max(steps, static_cast<int>(ceil(delta / max_step)));
-            }
+            double dt_waypoints = waypoint1.time - waypoint0.time;
 
-            auto segment = linearInterpolation(q0, q1, steps);
+            int dof = waypoint0.q.size();
 
+            // assumption is that plan does not violate dq limits
+            int steps = static_cast<int>(max(1.0, ceil(dt_waypoints / dt_sim)));
+
+            double dt = dt_waypoints / static_cast<double>(steps); // dt between steps
+
+            auto segment = linearInterpolation(waypoint0, waypoint1, steps, dt);
 
             if (s == 0)
             {
