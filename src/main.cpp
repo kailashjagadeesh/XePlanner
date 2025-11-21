@@ -3,6 +3,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include "utils.h"
+#include <stdexcept> 
+#include <iostream>
+
+using namespace std;
 
 mjModel *m = NULL; // MuJoCo model
 mjData *d = NULL;  // MuJoCo data
@@ -21,6 +25,8 @@ static bool last_collision = false;
 
 static const double start_pose[7] = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
 
+static const int num_actuators = 4;
+static const double dq_max = 3.142; // rad / s
 
 static double envOrDefault(const char *name, double fallback)
 {
@@ -136,19 +142,61 @@ int main()
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
+    vector<double> start_pose_v(start_pose, start_pose + 7);
+    vector<double> end_pose  = {1, -0.2, 1, -2.2, 0.5, 1.0, -1}; // just makign this up
+
+    // some wierd copying going on
+    vector<vector<double>> end_poses(num_actuators, end_pose);
+    vector<vector<double>> start_poses(num_actuators, start_pose_v);
+
+
     // TODO: put planner here
+    vector<vector<vector<double>>> plan(num_actuators);
+
+    // For each arm, add its sequence of waypoints
+    for (int arm = 0; arm < num_actuators; ++arm) {
+        plan[arm].push_back(start_poses[arm]); // start
+        plan[arm].push_back(end_poses[arm]);   // end
+    }
+    double dt = m->opt.timestep;
+    cout << dt << endl;
+    auto dense_plan = densifyPlan(plan, dt, dq_max); // this function will densify the plan so that the max change in positions is less than dq
+
+    int t = 0;
+    int T = dense_plan[0].size();
+    int dof = dense_plan[0][0].size();
+
+
+    // map arm, joint to location to control data index
+    vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_actuators; ++arm) {
+        for (int j = 0; j < dof; ++j) {
+            char name[64];
+            snprintf(name, sizeof(name), "panda%d_actuator%d", arm+1, j+1);
+            int id = mj_name2id(m, mjOBJ_ACTUATOR, name); // returns -1 if not found
+            if (id == -1) throw runtime_error("Error: Could not find actuator id");
+            act_id[arm][j] = id;
+        }
+    }
 
     // run main loop, target real-time simulation and 60 fps rendering
     while (!glfwWindowShouldClose(window))
     {
-        // advance interactive simulation for 1/60 sec
-        //  Assuming MuJoCo can simulate faster than real-time, which it usually can,
-        //  this loop will finish on time for the next frame to be rendered at 60 fps.
-        //  Otherwise add a cpu timer and exit this loop when it is time to render.
-        mjtNum simstart = d->time;
-        while (d->time - simstart < 1.0 / 60.0)
+        mj_step1(m, d); 
+        for (int arm = 0; arm < num_actuators; arm++)
         {
-            mj_step(m, d);
+            for (int j = 0; j < dof; j++)
+            {
+                int id = act_id[arm][j];
+                d->ctrl[id] = dense_plan[arm][t][j]; // mujoco will use PD control by default
+            }
+        }
+        mj_step2(m, d);
+
+        if (++t == T)
+        { 
+            // instead of break, make this stay at the last pose
+            break;
         }
 
         bool collision = hasCollision(m, d, print_collisions);
@@ -156,10 +204,7 @@ int main()
         {
             printf("Collision detected\n");
         }
-        else if (!print_collisions && !collision && last_collision)
-        {
-            printf("Collision cleared\n");
-        }
+
         last_collision = collision;
 
         // get framebuffer viewport
@@ -184,6 +229,5 @@ int main()
     // free MuJoCo model and data
     mj_deleteData(d);
     mj_deleteModel(m);
-
     return 0;
 }

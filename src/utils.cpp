@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <iostream>
 using namespace std;
 void setArmActuatorTargets(mjModel *model, mjData *data, const double target_pose[])
 {
@@ -124,43 +125,57 @@ vector<vector<double>> linearInterpolation(const vector<double> &start, const ve
     return trajectory;
 }
 
-// TODO: going to need to talk about planning space: since going to need to standardize dq
-// Depending on the planner used, if space is discretized, this may not need to be used
-vector<vector<vector<double>>> interpolatePlan(const vector<vector<vector<double>>> &waypoints, int steps_per_segment)
+vector<vector<vector<double>>> densifyPlan(const vector<vector<vector<double>>> &waypoints, double dt, double dq_max)
 {
-    int N = static_cast<int>(waypoints.size());
+    int num_arms = waypoints.size();
     vector<vector<vector<double>>> interpolated_plan;
+    interpolated_plan.resize(num_arms);
 
-    for (int arm = 0; arm < N; ++arm)
+    for (int arm = 0; arm < num_arms; ++arm)
     {
         const auto &arm_waypoints = waypoints[arm];
-        int M = static_cast<int>(arm_waypoints.size());
+        int M = arm_waypoints.size();
 
-        vector<vector<double>> arm_plan;
+        // Only one waypoint: nothing to interpolate
+        if (M == 1)
+        {
+            interpolated_plan[arm].push_back(arm_waypoints[0]);
+            continue;
+        }
 
+        // Build full plan for this arm
         for (int s = 0; s < M - 1; ++s)
         {
-            auto segment = linearInterpolation(arm_waypoints[s], arm_waypoints[s + 1], steps_per_segment);
+            const auto &q0 = arm_waypoints[s];
+            const auto &q1 = arm_waypoints[s + 1];
+            int dof = q0.size();
+
+            int steps = 1;
+            for (int j = 0; j < dof; j++)
+            {
+                double delta = fabs(q1[j] - q0[j]);
+                double max_step = dq_max * dt;
+                steps = max(steps, static_cast<int>(ceil(delta / max_step)));
+            }
+
+            auto segment = linearInterpolation(q0, q1, steps);
+
 
             if (s == 0)
             {
-                for (auto &pose : segment)
-                    arm_plan.push_back(move(pose));
+                interpolated_plan[arm].insert(
+                    interpolated_plan[arm].end(),
+                    segment.begin(),
+                    segment.end());
             }
             else
             {
-                // skip first pose to avoid duplicating the shared waypoint
-                for (size_t k = 1; k < segment.size(); ++k)
-                {
-                    arm_plan.push_back(move(segment[k]));
-                }
+                interpolated_plan[arm].insert(
+                    interpolated_plan[arm].end(),
+                    segment.begin() + 1, // skip first
+                    segment.end());
             }
         }
-
-        // if there was only a single waypoint, include it
-        if (M == 1) arm_plan.push_back(arm_waypoints[0]);
-
-        interpolated_plan.push_back(move(arm_plan));
     }
 
     return interpolated_plan;
