@@ -145,27 +145,24 @@ int main()
 
     vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
-    vector<Waypoint> mid_poses(num_actuators, Waypoint(end_pose, 1.0));
-    vector<Waypoint> start_poses(num_actuators, Waypoint(start_pose, 0));
-    vector<Waypoint> end_poses(num_actuators, Waypoint(start_pose, 2.0));
 
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
-    // INPUT: vector<vector<Waypoint>> -> dim(num_arms, num_waypoints)
+    // INPUT: vector<Node*> -> dim(num_waypoints)
 
-    vector<vector<Waypoint>> plan(num_actuators);
+    vector<vector<double>> start_poses(num_actuators, start_pose);
+    vector<vector<double>> end_poses(num_actuators, end_pose);
+    Node* start = new Node(start_poses, 0);
+    Node* mid = new Node(end_poses, 1);
+    Node* end = new Node(start_poses, 2);
+
+    vector<Node*> plan = {start, mid, end};
     // --------------------------------------------------------------------------------------- //
 
-    // For each arm, add its sequence of waypoints
-    for (int arm = 0; arm < num_actuators; ++arm) {
-        plan[arm].push_back(start_poses[arm]);
-        plan[arm].push_back(mid_poses[arm]);
-        plan[arm].push_back(end_poses[arm]);
-    }
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
 
-    int dof = dense_plan[0][0].q.size();
+    int dof = dense_plan[0]->q[0].size();
 
     // map arm, joint to location to control data index
     vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
@@ -184,13 +181,14 @@ int main()
         mj_step1(m, d);
         double t_sim = d->time;
 
-        int t = static_cast<int>(t_sim / dt);
-        for (int arm = 0; arm < num_actuators; arm++)
+        int t = min(static_cast<int>(t_sim / dt), static_cast<int>(dense_plan.size() - 1));
+        Node* curr_node = dense_plan[t];
+        for (int arm = 0; arm < curr_node->q.size(); arm++)
         {
             for (int j = 0; j < dof; j++)
             {
                 int id = act_id[arm][j];
-                d->ctrl[id] = dense_plan[arm][min(t, static_cast<int>(dense_plan[arm].size())-1)].q[j]; // mujoco will use PD control by default
+                d->ctrl[id] = curr_node->q[arm][j];
             }
         }
         mj_step2(m, d);

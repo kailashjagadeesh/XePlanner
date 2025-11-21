@@ -102,81 +102,90 @@ bool hasCollision(const mjModel *model, const mjData *data, bool print_collision
     return false;
 }
 
-vector<Waypoint> linearInterpolation(const Waypoint &start, const Waypoint &end, int steps, double dt)
+vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps, double dt)
 {
-    vector<Waypoint> trajectory;
-    int dof = start.q.size();
+    int num_actuators = start->q.size();
+    int dof = start->q[0].size();
 
-    vector<double> dq(dof, 0.0);
-
-    for (int i = 0; i < dof; i++)
-    {
-        dq[i] = (end.q[i] - start.q[i]) / static_cast<double>(steps);
-    }
+    vector<Node*> trajectory(steps+1);
 
     for (int s = 0; s <= steps; s++)
     {
-        vector<double> q(dof, 0);
+        Node* waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t * s * dt);
+        trajectory[s] = waypoint;
+    }
+
+    for (int arm = 0; arm < num_actuators; arm++) // for each actuator
+    {
+        auto start_q = start->q[arm];
+        auto end_q = end->q[arm];
+
+        int dof = start_q.size();
+
+        vector<double> dq(dof, 0.0);
+
         for (int i = 0; i < dof; i++)
         {
-            q[i] = start.q[i] + dq[i] * s;
+            dq[i] = (end_q[i] - start_q[i]) / static_cast<double>(steps);
         }
-        Waypoint pose(q, start.time + dt * s);
-        trajectory.push_back(move(pose));
+
+        for (int s = 0; s <= steps; s++)
+        {
+            vector<double> q(dof, 0);
+            for (int i = 0; i < dof; i++)
+            {
+                q[i] = start_q[i] + dq[i] * s;
+            }
+            trajectory[s]->q[arm] = q;
+        }
     }
     return trajectory;
 }
 
-// List of waypoints, dim: (num arms, plan length)
-vector<vector<Waypoint>> densifyPlan(const vector<vector<Waypoint>> &waypoints, double dt_sim)
+// Output List of Nodes, dim: (dense plan length)
+vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
 {
-    int num_arms = waypoints.size();
-    vector<vector<Waypoint>> interpolated_plan;
-    interpolated_plan.resize(num_arms);
-
-    for (int arm = 0; arm < num_arms; ++arm)
+    if (waypoints.size() == 0)
     {
-        const auto &arm_waypoints = waypoints[arm];
-        int M = arm_waypoints.size();
-
-        if (M == 1)
-        {
-            interpolated_plan[arm].push_back(arm_waypoints[0]);
-            continue;
-        }
-
-        for (int s = 0; s < M - 1; ++s)
-        {
-            const auto &waypoint0 = arm_waypoints[s];
-            const auto &waypoint1 = arm_waypoints[s+1];
-
-            double dt_waypoints = waypoint1.time - waypoint0.time;
-
-            int dof = waypoint0.q.size();
-
-            // assumption is that plan does not violate dq limits
-            int steps = static_cast<int>(max(1.0, ceil(dt_waypoints / dt_sim)));
-
-            double dt = dt_waypoints / static_cast<double>(steps); // dt between steps
-
-            auto segment = linearInterpolation(waypoint0, waypoint1, steps, dt);
-
-            if (s == 0)
-            {
-                interpolated_plan[arm].insert(
-                    interpolated_plan[arm].end(),
-                    segment.begin(),
-                    segment.end());
-            }
-            else
-            {
-                interpolated_plan[arm].insert(
-                    interpolated_plan[arm].end(),
-                    segment.begin() + 1, // skip first
-                    segment.end());
-            }
-        }
+        return {};
     }
 
+    int num_actuators = waypoints[0]->q.size();
+    vector<Node*> interpolated_plan;
+
+    int M = waypoints.size();
+    if (M == 1)
+    {
+        return waypoints;
+    }
+
+    for (int s = 0; s < M - 1; s++)
+    {
+        const auto &waypoint0 = waypoints[s];
+        const auto &waypoint1 = waypoints[s+1];
+
+        double dt_waypoints = waypoint1->t - waypoint0->t;
+
+        // assumption is that plan does not violate dq limits
+        int steps = static_cast<int>(max(1.0, ceil(dt_waypoints / dt_sim)));
+
+        double dt = dt_waypoints / static_cast<double>(steps); // dt between steps
+
+        auto segment = linearInterpolation(waypoint0, waypoint1, steps, dt);
+        if (s == 0)
+        {
+            interpolated_plan.insert(
+                interpolated_plan.end(),
+                segment.begin(),
+                segment.end());
+        }
+        else
+        {
+            interpolated_plan.insert(
+                interpolated_plan.end(),
+                segment.begin() + 1, // skip first
+                segment.end());
+        }
+    }
     return interpolated_plan;
 }
