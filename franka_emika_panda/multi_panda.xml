@@ -126,9 +126,9 @@
   <worldbody>
     <light pos="0 0 2" mode="trackcom"/>
 
-    <!-- TODO: ROTATE PANDAS INTO DESIRED POSITIONS -->
-    <!-- panda1: positioned at 0.6 -0.6 0 -->
-    <body name="panda1_link0" childclass="panda" pos="0.6 -0.6 0">
+    <!-- Arranged as two facing pairs with a zipper offset and a central work strip -->
+    <!-- panda1: left column (pair 1,2), lowest y (alternate along y). X moved closer to center -->
+    <body name="panda1_link0" childclass="panda" pos="-0.35 -0.60 0" quat="1 0 0 0">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -252,8 +252,8 @@
       </body>
     </body>
 
-    <!-- panda2: positioned at 0.6 0.6 0 -->
-    <body name="panda2_link0" childclass="panda" pos="0.6 0.6 0">
+    <!-- panda2: left column (pair 1,2), higher y. X moved closer to center -->
+    <body name="panda2_link0" childclass="panda" pos="-0.35 0.20 0" quat="1 0 0 0">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -377,8 +377,8 @@
       </body>
     </body>
 
-    <!-- panda3: positioned at -0.6 -0.6 0 -->
-    <body name="panda3_link0" childclass="panda" pos="-0.6 -0.6 0">
+    <!-- panda3: right column (pair 3,4), lower y (alternate along y). X moved closer to center -->
+    <body name="panda3_link0" childclass="panda" pos="0.35 -0.20 0" quat="0 0 0 1">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -502,8 +502,8 @@
       </body>
     </body>
 
-    <!-- panda4: positioned at -0.6 0.6 0 -->
-    <body name="panda4_link0" childclass="panda" pos="-0.6 0.6 0">
+    <!-- panda4: right column (pair 3,4), highest y. X moved closer to center -->
+    <body name="panda4_link0" childclass="panda" pos="0.35 0.60 0" quat="0 0 0 1">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
