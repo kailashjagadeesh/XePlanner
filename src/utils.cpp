@@ -92,9 +92,14 @@ bool hasCollision(const mjModel *model, const mjData *data, bool print_collision
         {
             if (print_collisions)
             {
-                const char *g1 = mj_id2name(model, mjOBJ_GEOM, c.geom1);
-                const char *g2 = mj_id2name(model, mjOBJ_GEOM, c.geom2);
-                printf("Collision: %s vs %s (penetration %.5f)\n", g1 ? g1 : "geom1", g2 ? g2 : "geom2", c.dist);
+                // const char *g1 = mj_id2name(model, mjOBJ_GEOM, c.geom1);
+                // const char *g2 = mj_id2name(model, mjOBJ_GEOM, c.geom2);
+                int body1_id = model->geom_bodyid[c.geom1];
+                int body2_id = model->geom_bodyid[c.geom2];
+
+                const char* b1 = mj_id2name(model, mjOBJ_BODY, body1_id);
+                const char* b2 = mj_id2name(model, mjOBJ_BODY, body2_id);
+                printf("Collision: %s vs %s (penetration %.5f)\n", b1 ? b1 : "body1", b2 ? b2 : "body2", c.dist);
             }
             return true;
         }
@@ -193,36 +198,127 @@ vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim)
 // This uses mujocos forward kinematics to compute collisions. If too slow, we can look into
 // writing our own collision checker
 // Returns->vector of collision pairs, with id's of arms in collision
-vector<pair<int, int>> isCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &act_id)
+vector<pair<int,int>> isMultiArmCollision(const vector<vector<double>>& joint_pos, mjModel* model, mjData* data, const vector<vector<int>>& joint_id, const vector<int>& body_to_arm)
 {
     int num_actuators = joint_pos.size();
     int dof = joint_pos[0].size();
-    for (int arm = 0; arm < num_actuators; arm++)
-    {
-        for (int j = 0; j < dof; j++)
-        {
-            int id = act_id[arm][j];
-            data->qpos[id] = joint_pos[arm][j];
+
+    // Set joint positions into qpos using jnt_qposadr
+    for (int arm = 0; arm < num_actuators; ++arm) {
+        for (int j = 0; j < dof; ++j) {
+            int jid  = joint_id[arm][j];
+            int qadr = model->jnt_qposadr[jid];
+            data->qpos[qadr] = joint_pos[arm][j];
         }
     }
-    mj_fwdPosition(model, data);
-    mj_collision(model, data);
-    vector<pair<int, int>> collisions;
 
-    for (int i = 0; i < data->ncon; i++)
-    {
-        int g1 = data->contact[i].geom1;
-        int g2 = data->contact[i].geom2;
+    mj_fwdPosition(model, data); 
 
-        // make sure this is the same as expected somehow
-        int b1 = model->geom_bodyid[g1];
-        int b2 = model->geom_bodyid[g2];
-        collisions.emplace_back(b1, b2);
+    vector<pair<int,int>> collisions;
+    for (int i = 0; i < data->ncon; ++i) {
+        const mjContact &c = data->contact[i];
+        if (c.dist >= 0.0) continue;
+
+        int b1 = model->geom_bodyid[c.geom1];
+        int b2 = model->geom_bodyid[c.geom2];
+        int arm1 = body_to_arm[b1];
+        int arm2 = body_to_arm[b2];
+
+        if (arm1 != -1 && arm2 != -1 && arm1 != arm2)
+        {
+            collisions.emplace_back(arm1, arm2);
+        }
     }
+
     return collisions;
 }
 
-vector<pair<int, int>> isCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &act_id)
+
+vector<vector<int>> buildBodyChildren(const mjModel* model)
 {
-    return isCollision(node->q, model, data, act_id);
+    vector<vector<int>> children(model->nbody);
+    for (int b = 1; b < model->nbody; b++) {
+        int p = model->body_parentid[b];
+        if (p >= 0)
+            children[p].push_back(b);
+    }
+    return children;
+}
+
+vector<pair<int, int>> isMulitArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm)
+{
+    return isMultiArmCollision(node->q, model, data, joint_id, body_to_arm);
+}
+
+vector<int> bodyToArm(
+    const vector<vector<int>>& act_id,
+    const mjModel* model,
+    int num_actuators,
+    int dof)
+{
+    vector<int> body_to_arm(model->nbody, -1);
+
+    auto children = buildBodyChildren(model);
+
+    vector<int> root_bodies(num_actuators, -1);
+    for (int arm = 0; arm < num_actuators; arm++) {
+        int first_act = act_id[arm][0];             
+        int joint = model->actuator_trnid[2*first_act];
+        int body = model->jnt_bodyid[joint];
+        root_bodies[arm] = body;
+    }
+
+    // BFS to assign all bodies in arm subtree
+    for (int arm = 0; arm < num_actuators; arm++) {
+        int root = root_bodies[arm];
+        if (root < 0) continue;
+
+        vector<int> queue = {root};
+        body_to_arm[root] = arm;
+
+        for (size_t i = 0; i < queue.size(); ++i) {
+            int parent = queue[i];
+            for (int child : children[parent]) {
+                if (body_to_arm[child] == -1) {
+                    body_to_arm[child] = arm;
+                    queue.push_back(child);
+                }
+            }
+        }
+    }
+
+    return body_to_arm;
+}
+
+bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjData *data, int arm, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm)
+{
+    int dof = static_cast<int>(joint_pos.size());
+
+    int world_body_id = 0;
+    for (int j = 0; j < dof; ++j) {
+        int jid  = joint_id[arm][j]; 
+        int qadr = model->jnt_qposadr[jid];
+        data->qpos[qadr] = joint_pos[j];
+    }
+
+    mj_fwdPosition(model, data);
+
+    for (int i = 0; i < data->ncon; ++i) {
+        const mjContact &c = data->contact[i];
+        if (c.dist >= 0.0) continue; 
+
+        int b1 = model->geom_bodyid[c.geom1];
+        int b2 = model->geom_bodyid[c.geom2];
+
+        int arm1 = body_to_arm[b1];
+        int arm2 = body_to_arm[b2];
+
+        if (arm1 == arm && arm2 == arm)
+            return true;
+
+        if ((arm1 == arm && b2 == world_body_id) ||
+            (arm2 == arm && b1 == world_body_id))
+            return true;
+    }
+    return false;
 }

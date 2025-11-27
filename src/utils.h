@@ -1,10 +1,11 @@
 #include <mujoco/mujoco.h>
 #include <vector>
 #include <cmath>
+#include <regex>
 
 using namespace std;
 
-struct Node 
+struct Node
 {
 	vector<vector<double>> q;
 	double t;
@@ -17,9 +18,11 @@ void setGrippersOpen(mjModel *model, mjData *data);
 void setArmsStartPose(mjModel *model, mjData *data, const vector<double> &start_pose);
 bool hasCollision(const mjModel *model, const mjData *data, bool print_collisions); // used to check collisions during sim execution
 
-vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps, double dt);
-vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim);
+vector<Node *> linearInterpolation(const Node *start, const Node *end, int steps, double dt);
+vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim);
 
-vector<pair<int, int>> isCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &act_id); // used to check collisions during planning
-vector<pair<int, int>> isCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &act_id);
-
+bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjData *data, int arm, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
+vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
+vector<pair<int, int>> isMultiArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
+vector<vector<int>> buildBodyChildren(const mjModel *model);
+vector<int> bodyToArm(const vector<vector<int>> &act_id, const mjModel *model, int num_actuators, int dof);
