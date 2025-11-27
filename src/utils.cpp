@@ -102,16 +102,16 @@ bool hasCollision(const mjModel *model, const mjData *data, bool print_collision
     return false;
 }
 
-vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps, double dt)
+vector<Node *> linearInterpolation(const Node *start, const Node *end, int steps, double dt)
 {
     int num_actuators = start->q.size();
     int dof = start->q[0].size();
 
-    vector<Node*> trajectory(steps+1);
+    vector<Node *> trajectory(steps + 1);
 
     for (int s = 0; s <= steps; s++)
     {
-        Node* waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t + s * dt);
+        Node *waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t + s * dt);
         trajectory[s] = waypoint;
     }
 
@@ -143,7 +143,7 @@ vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps,
 }
 
 // Output List of Nodes, dim: (dense plan length)
-vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
+vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim)
 {
     if (waypoints.size() == 0)
     {
@@ -151,7 +151,7 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
     }
 
     int num_actuators = waypoints[0]->q.size();
-    vector<Node*> interpolated_plan;
+    vector<Node *> interpolated_plan;
 
     int M = waypoints.size();
     if (M == 1)
@@ -162,7 +162,7 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
     for (int s = 0; s < M - 1; s++)
     {
         const auto &waypoint0 = waypoints[s];
-        const auto &waypoint1 = waypoints[s+1];
+        const auto &waypoint1 = waypoints[s + 1];
 
         double dt_waypoints = waypoint1->t - waypoint0->t;
 
@@ -188,4 +188,41 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
         }
     }
     return interpolated_plan;
+}
+
+// This uses mujocos forward kinematics to compute collisions. If too slow, we can look into
+// writing our own collision checker
+// Returns->vector of collision pairs, with id's of arms in collision
+vector<pair<int, int>> isCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &act_id)
+{
+    int num_actuators = joint_pos.size();
+    int dof = joint_pos[0].size();
+    for (int arm = 0; arm < num_actuators; arm++)
+    {
+        for (int j = 0; j < dof; j++)
+        {
+            int id = act_id[arm][j];
+            data->qpos[id] = joint_pos[arm][j];
+        }
+    }
+    mj_fwdPosition(model, data);
+    mj_collision(model, data);
+    vector<pair<int, int>> collisions;
+
+    for (int i = 0; i < data->ncon; i++)
+    {
+        int g1 = data->contact[i].geom1;
+        int g2 = data->contact[i].geom2;
+
+        // make sure this is the same as expected somehow
+        int b1 = model->geom_bodyid[g1];
+        int b2 = model->geom_bodyid[g2];
+        collisions.emplace_back(b1, b2);
+    }
+    return collisions;
+}
+
+vector<pair<int, int>> isCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &act_id)
+{
+    return isCollision(node->q, model, data, act_id);
 }

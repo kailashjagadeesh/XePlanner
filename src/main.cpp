@@ -26,6 +26,7 @@ static bool last_collision = false;
 
 static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
 
+// HYPERPARAMETERS
 static const int num_actuators = 4;
 static const double dt = 0.01;
 static const double dq_max = 3.142; // rad / s
@@ -133,36 +134,11 @@ int main()
     mjv_defaultScene(&scn);
     mjr_defaultContext(&con);
 
-    // set initial arm pose and gripper state
-    setArmsStartPose(m, d, start_pose);
-    setArmActuatorTargets(m, d, start_pose);
-    setGrippersOpen(m, d);
-    mj_forward(m, d);
-
     // create scene and context
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
-
-    vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
-
-
-
-    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
-    // INPUT: vector<Node*> -> dim(num_waypoints)
-
-    vector<vector<double>> start_poses(num_actuators, start_pose);
-    vector<vector<double>> end_poses(num_actuators, end_pose);
-    Node* start = new Node(start_poses, 0);
-    Node* mid = new Node(end_poses, 1);
-    Node* end = new Node(start_poses, 2);
-
-    vector<Node*> plan = {start, mid, end};
-    // --------------------------------------------------------------------------------------- //
-
-
-    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
-
-    int dof = dense_plan[0]->q[0].size();
+    
+    int dof = start_pose.size();
 
     // map arm, joint to location to control data index
     vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
@@ -175,6 +151,29 @@ int main()
             act_id[arm][j] = id;
         }
     }
+
+    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
+    // INPUT: vector<Node*> -> dim(num_waypoints)
+    vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
+    vector<vector<double>> start_poses(num_actuators, start_pose);
+    vector<vector<double>> end_poses(num_actuators, end_pose);
+    Node* start = new Node(start_poses, 0);
+    Node* mid = new Node(end_poses, 1);
+    Node* mid_pause = new Node(end_poses, 2);
+    Node* end = new Node(start_poses, 3);
+
+    vector<Node*> plan = {start, mid, mid_pause, end};
+    // --------------------------------------------------------------------------------------- //
+
+
+    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
+
+    // set initial arm pose and gripper state
+    setArmsStartPose(m, d, start_pose);
+    setArmActuatorTargets(m, d, start_pose);
+    setGrippersOpen(m, d);
+    mj_forward(m, d);
+
 
     while (!glfwWindowShouldClose(window))
     {
