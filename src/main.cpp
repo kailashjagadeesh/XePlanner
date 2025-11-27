@@ -152,6 +152,7 @@ int main()
     Node *start = new Node(start_poses, 0.0);
     Node *goal = new Node(end_poses, 0.0);
 
+    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
     printf("Planning with RRT-Connect...\n");
     // Run a simple RRT-Connect to get sparse waypoints, then densify them.
     vector<Node *> plan = rrtConnect(
@@ -166,8 +167,7 @@ int main()
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
     printf("Dense trajectory steps: %zu\n", dense_plan.size());
-    printf("Press Enter to start executing the trajectory...\n");
-    getchar();
+
 
     int dof = dense_plan[0]->q[0].size();
 
@@ -182,6 +182,8 @@ int main()
             act_id[arm][j] = id;
         }
     }
+    
+    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
 
     while (!glfwWindowShouldClose(window))
     {
