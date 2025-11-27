@@ -3,7 +3,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include "utils.h"
-#include <stdexcept> 
+#include "rrt_connect.h"
+#include <stdexcept>
 #include <iostream>
 #include <algorithm>
 
@@ -143,24 +144,30 @@ int main()
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
-    vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
+    vector<double> end_pose = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
-
-
-    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
-    // INPUT: vector<Node*> -> dim(num_waypoints)
-
+    // Build start/goal nodes for the planner (same pose applied to all arms).
     vector<vector<double>> start_poses(num_actuators, start_pose);
     vector<vector<double>> end_poses(num_actuators, end_pose);
-    Node* start = new Node(start_poses, 0);
-    Node* mid = new Node(end_poses, 1);
-    Node* end = new Node(start_poses, 2);
+    Node *start = new Node(start_poses, 0.0);
+    Node *goal = new Node(end_poses, 0.0);
 
-    vector<Node*> plan = {start, mid, end};
-    // --------------------------------------------------------------------------------------- //
-
+    printf("Planning with RRT-Connect...\n");
+    // Run a simple RRT-Connect to get sparse waypoints, then densify them.
+    vector<Node *> plan = rrtConnect(
+        m,
+        num_actuators,
+        static_cast<int>(start_pose.size()),
+        start,
+        goal,
+        20000, //max_iters
+        0.6);//step_size
+    printf("Planning done. Sparse waypoints: %zu\n", plan.size());
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
+    printf("Dense trajectory steps: %zu\n", dense_plan.size());
+    printf("Press Enter to start executing the trajectory...\n");
+    getchar();
 
     int dof = dense_plan[0]->q[0].size();
 

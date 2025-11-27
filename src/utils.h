@@ -1,3 +1,4 @@
+#pragma once
 #include <mujoco/mujoco.h>
 #include <vector>
 #include <cmath>

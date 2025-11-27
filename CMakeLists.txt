@@ -15,7 +15,7 @@ find_package(glfw3 REQUIRED)
 
 include_directories(${MUJOCO_INCLUDE_DIR})
 
-add_executable(XePlanner src/main.cpp src/utils.cpp)
+add_executable(XePlanner src/main.cpp src/utils.cpp src/rrt_connect.cpp)
 
 # Dynamic link
 target_link_libraries(XePlanner ${MUJOCO_LIBRARY} glfw)
