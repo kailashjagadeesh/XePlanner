@@ -102,16 +102,16 @@ bool hasCollision(const mjModel *model, const mjData *data, bool print_collision
     return false;
 }
 
-vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps, double dt)
+vector<Node *> linearInterpolation(const Node *start, const Node *end, int steps, double dt)
 {
     int num_actuators = start->q.size();
     int dof = start->q[0].size();
 
-    vector<Node*> trajectory(steps+1);
+    vector<Node *> trajectory(steps + 1);
 
     for (int s = 0; s <= steps; s++)
     {
-        Node* waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t + s * dt);
+        Node *waypoint = new Node(vector<vector<double>>(num_actuators, vector<double>(dof)), start->t + s * dt);
         trajectory[s] = waypoint;
     }
 
@@ -143,7 +143,7 @@ vector<Node*> linearInterpolation(const Node* start, const Node* end, int steps,
 }
 
 // Output List of Nodes, dim: (dense plan length)
-vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
+vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim)
 {
     if (waypoints.size() == 0)
     {
@@ -151,7 +151,7 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
     }
 
     int num_actuators = waypoints[0]->q.size();
-    vector<Node*> interpolated_plan;
+    vector<Node *> interpolated_plan;
 
     int M = waypoints.size();
     if (M == 1)
@@ -162,7 +162,7 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
     for (int s = 0; s < M - 1; s++)
     {
         const auto &waypoint0 = waypoints[s];
-        const auto &waypoint1 = waypoints[s+1];
+        const auto &waypoint1 = waypoints[s + 1];
 
         double dt_waypoints = waypoint1->t - waypoint0->t;
 
@@ -188,4 +188,117 @@ vector<Node*> densifyPlan(const vector<Node*> &waypoints, double dt_sim)
         }
     }
     return interpolated_plan;
+}
+
+void setAllArmsQpos(const mjModel *model, mjData *data, const std::vector<std::vector<double>> &q_multi)
+{
+    int num_actuators = static_cast<int>(q_multi.size());
+
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        const auto &q_arm = q_multi[arm];
+        int dof = static_cast<int>(q_arm.size());
+
+        for (int j = 0; j < dof; ++j)
+        {
+            char joint_name[64];
+            // assumes joint naming: panda1_joint1, panda1_joint2, ..., panda4_joint7
+            std::snprintf(joint_name, sizeof(joint_name),
+                          "panda%d_joint%d", arm + 1, j + 1);
+
+            int j_id = mj_name2id(model, mjOBJ_JOINT, joint_name);
+            if (j_id < 0)
+            {
+                // If a joint is missing, you can choose to warn or skip.
+                // For now we just skip silently.
+                continue;
+            }
+
+            int qpos_adr = model->jnt_qposadr[j_id];
+            data->qpos[qpos_adr] = q_arm[j];
+        }
+    }
+}
+
+// Check if a multi-arm configuration is collision-free
+bool isStateValid(const mjModel *model, mjData *data, const std::vector<std::vector<double>> &q_multi, bool print_collisions)
+{
+    // Set all arm joint positions
+    setAllArmsQpos(model, data, q_multi);
+
+    mju_zero(data->qvel, model->nv);
+    mju_zero(data->qacc, model->nv);
+    mju_zero(data->ctrl, model->nu);
+
+    mj_forward(model, data);
+
+    return !hasCollision(model, data, print_collisions);
+}
+
+// Check if the entire motion from q_from to q_to is collision-free
+bool isEdgeValid(const mjModel *model,
+                 mjData *data,
+                 const std::vector<std::vector<double>> &q_from,
+                 const std::vector<std::vector<double>> &q_to,
+                 int num_substeps,
+                 bool print_collisions)
+{
+    if (q_from.size() != q_to.size())
+        return false;
+
+    int num_arms = static_cast<int>(q_from.size());
+    for (int arm = 0; arm < num_arms; ++arm)
+    {
+        if (q_from[arm].size() != q_to[arm].size())
+            return false;
+    }
+
+    for (int k = 0; k <= num_substeps; ++k)
+    {
+        double alpha = static_cast<double>(k) / static_cast<double>(num_substeps);
+
+        std::vector<std::vector<double>> q_interp(num_arms);
+        for (int arm = 0; arm < num_arms; ++arm)
+        {
+            int dof = static_cast<int>(q_from[arm].size());
+            q_interp[arm].resize(dof);
+
+            for (int j = 0; j < dof; ++j)
+            {
+                double q0 = q_from[arm][j];
+                double q1 = q_to[arm][j];
+                q_interp[arm][j] = (1.0 - alpha) * q0 + alpha * q1;
+            }
+        }
+
+        if (!isStateValid(model, data, q_interp, print_collisions && (k == 0)))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+int geomToAgent(const mjModel* model, int geom_id, int num_agents)
+{
+    if (geom_id < 0) return -1;
+
+    const char* name = mj_id2name(model, mjOBJ_GEOM, geom_id);
+    if (!name) return -1;
+
+    const char prefix[] = "panda";
+    const int prefix_len = 5;
+
+    if (strncmp(name, prefix, prefix_len) != 0)
+        return -1;
+
+    const char* p = name + prefix_len;
+    char* endptr = nullptr;
+    long idx = strtol(p, &endptr, 10);
+
+    if (endptr == p) return -1;
+    if (idx < 1 || idx > num_agents) return -1;
+
+    return int(idx - 1);
 }

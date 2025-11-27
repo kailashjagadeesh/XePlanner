@@ -3,9 +3,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include "utils.h"
-#include <stdexcept> 
+#include <stdexcept>
 #include <iostream>
 #include <algorithm>
+
+#include "cbs.h"
 
 using namespace std;
 
@@ -24,7 +26,8 @@ static double lasty = 0.0;
 static bool print_collisions = false;
 static bool last_collision = false;
 
-static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+// static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> start_pose = {0.0, 0.0, 0.0, -1.5, 0.0, 1.5, 0.0};
 
 static const int num_actuators = 4;
 static const double dt = 0.01;
@@ -143,22 +146,87 @@ int main()
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
-    vector<double> end_pose  = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
+    std::vector<double> HOME_POSE = {
+        0.0,
+        -0.785398, // -45 degrees
+        0.0,
+        -2.35619, // -135 degrees
+        0.0,
+        1.57,    // 90 degrees
+        0.785398 // 45 degrees
+    };
 
+    std::vector<double> UPRIGHT_POSE = {
+        0.0,
+        -0.5,
+        0.0,
+        -1.8,
+        0.0,
+        2.3,
+        0.8};
 
+    std::vector<double> EASY_POSE = {0.0, -0.785398, 0.0, -2.35619, 0.0, 1.57, 0.785398};
+
+    // ----------------- CBS PLANNER SETUP ----------------- //
+    std::cout << "\n===== RUNNING FULL CBS PLANNER =====\n";
+
+    int num_agents = 1;
+    int dofs = start_pose.size();
+
+    CBSPlanner planner(m, dq_max, dt, num_agents, dofs);
+
+    std::vector<std::vector<double>> start_poses(num_agents, EASY_POSE);
+
+    // std::vector<double> end_pose = {0.0, -2.0, 0.0, -1.2, 0.5, 1.0, -1.0};
+    // std::vector<double> end_pose = {1.0, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0};
+    std::vector<std::vector<double>> goal_poses(num_agents, EASY_POSE);
+    // goal_poses[0][6] += 0.01;
+
+    std::cout << "\n[DEBUG] Checking State Validity:\n";
+
+    // For single arm, check Agent 0 (index 0)
+    std::vector<std::vector<double>> start_q_multi(num_agents, EASY_POSE);
+    std::vector<std::vector<double>> goal_q_multi(num_agents, EASY_POSE);
+
+    for (int a = 1; a < num_agents; ++a)
+    {
+        start_q_multi[a] = std::vector<double>(dofs, 0.0);
+        goal_q_multi[a] = std::vector<double>(dofs, 0.0);
+    }
+
+    // Check start pose validity
+    bool start_valid = isStateValid(m, d, start_q_multi, true);
+    std::cout << "Start Pose is Valid: " << (start_valid ? "YES" : "NO") << "\n";
+
+    // Check goal pose validity
+    bool goal_valid = isStateValid(m, d, goal_q_multi, true);
+    std::cout << "Goal Pose is Valid: " << (goal_valid ? "YES" : "NO") << "\n";
+
+    std::vector<Node *> plan = planner.plan(start_poses, goal_poses);
+    if (plan.empty())
+    {
+        std::cerr << "[MAIN] CBS failed to find a plan.\n";
+        // clean up and exit
+        mjv_freeScene(&scn);
+        mjr_freeContext(&con);
+        mj_deleteData(d);
+        mj_deleteModel(m);
+        return 0;
+    }
+
+    std::cout << "[MAIN] CBS returned plan with " << plan.size() << " waypoints\n";
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
     // INPUT: vector<Node*> -> dim(num_waypoints)
 
-    vector<vector<double>> start_poses(num_actuators, start_pose);
-    vector<vector<double>> end_poses(num_actuators, end_pose);
-    Node* start = new Node(start_poses, 0);
-    Node* mid = new Node(end_poses, 1);
-    Node* end = new Node(start_poses, 2);
+    // vector<vector<double>> start_poses(num_actuators, start_pose);
+    // vector<vector<double>> end_poses(num_actuators, end_pose);
+    // Node *start = new Node(start_poses, 0);
+    // Node *mid = new Node(end_poses, 1);
+    // Node *end = new Node(start_poses, 2);
 
-    vector<Node*> plan = {start, mid, end};
+    // vector<Node *> plan = {start, mid, end};
     // --------------------------------------------------------------------------------------- //
-
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
 
@@ -166,12 +234,15 @@ int main()
 
     // map arm, joint to location to control data index
     vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm) {
-        for (int j = 0; j < dof; ++j) {
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        for (int j = 0; j < dof; ++j)
+        {
             char name[64];
-            snprintf(name, sizeof(name), "panda%d_actuator%d", arm+1, j+1);
+            snprintf(name, sizeof(name), "panda%d_actuator%d", arm + 1, j + 1);
             int id = mj_name2id(m, mjOBJ_ACTUATOR, name); // returns -1 if not found
-            if (id == -1) throw runtime_error("Error: Could not find actuator id");
+            if (id == -1)
+                throw runtime_error("Error: Could not find actuator id");
             act_id[arm][j] = id;
         }
     }
@@ -182,7 +253,7 @@ int main()
         double t_sim = d->time;
 
         int t = min(static_cast<int>(t_sim / dt), static_cast<int>(dense_plan.size() - 1));
-        Node* curr_node = dense_plan[t];
+        Node *curr_node = dense_plan[t];
         for (int arm = 0; arm < curr_node->q.size(); arm++)
         {
             for (int j = 0; j < dof; j++)
