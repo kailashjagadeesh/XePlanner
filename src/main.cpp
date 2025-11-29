@@ -248,10 +248,32 @@ int main()
     // vector<Node *> plan = {start, mid, end};
     // --------------------------------------------------------------------------------------- //
 
-    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
+    auto dense_plan = plan; //densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
     printf("Dense trajectory steps: %zu\n", dense_plan.size());
 
     //int dof = dense_plan[0]->q[0].size();
+
+    // int step = 0;
+    // while (true)
+    // {
+    //     setAllArmsQpos(m, d, plan[step]->q);
+    //     auto collision = isMultiArmCollision(plan[step]->q, m, d, joint_id, body_to_arm);
+    //     cout << collision.size() << endl;
+    //     mj_forward(m, d);
+    //     step  = (step + 1) % plan.size();
+    //     mjrRect viewport = {0, 0, 0, 0};
+    //     glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
+    //     mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
+    //     mjr_render(viewport, &scn, &con);
+    //     glfwSwapBuffers(window);
+    //     glfwPollEvents();
+    // }
+
+    setAllArmsQpos(m, d, start_poses);
+    mj_forward(m, d);
+
+    int k = 0;
+    const int T = dense_plan.size();
 
     while (!glfwWindowShouldClose(window))
     {

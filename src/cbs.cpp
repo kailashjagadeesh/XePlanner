@@ -176,68 +176,29 @@ bool CBSPlanner::findFirstConflict(const MultiAgentPaths &paths, Conflict &out_c
     if (T_max == 0)
         return false;
 
-    int sim_dt = 0.01;
-
-    // Match the simulation resolution ---
-    // In main.cpp, densifyPlan uses dt=0.01. Waypoints are t=0,1,2...
-    // So there are 100 interpolation steps per waypoint interval.
-    // We must check ALL of them to ensure no collisions in blind spots.
-    // const int INTERPOLATION_STEPS = 100;
-    int INTERPOLATION_STEPS = static_cast<int>(std::ceil(dt_ / sim_dt));
-    const double SAFETY_MARGIN = 0.02; // 2cm extra buffer
+    // assumption is that sim_dt and dt match for this CBS
 
     for (size_t t = 0; t < T_max; ++t)
     {
-
-        int steps_to_check = (t == T_max - 1) ? 1 : INTERPOLATION_STEPS;
-
-        for (int k = 0; k < steps_to_check; ++k)
+        std::vector<std::vector<double>> waypoint;
+        for (int arm = 0; arm < paths.size(); arm++)
         {
-            double alpha = static_cast<double>(k) / static_cast<double>(INTERPOLATION_STEPS);
-
-            std::vector<std::vector<double>> q_multi(num_agents_, std::vector<double>(dof_, 0.0));
-
-            for (int agent = 0; agent < num_agents_; ++agent)
-            {
-                const auto &path = paths[agent];
-                const JointConfig &q_curr = (t < path.size()) ? path[t] : path.back();
-                const JointConfig &q_next = (t + 1 < path.size()) ? path[t + 1] : path.back();
-
-                for (int j = 0; j < dof_; ++j)
-                {
-                    q_multi[agent][j] = (1.0 - alpha) * q_curr[j] + alpha * q_next[j];
-                }
-            }
-            setAllArmsQpos(model_, data_plan_, q_multi);
-            mju_zero(data_plan_->qvel, model_->nv);
-            mju_zero(data_plan_->qacc, model_->nv);
-            mj_forward(model_, data_plan_);
-
-            for (int ci = 0; ci < data_plan_->ncon; ++ci)
-            {
-                const mjContact &c = data_plan_->contact[ci];
-
-                // If dist > 0.02, it's safe. If < 0.02, it's a conflict.
-                if (c.dist > SAFETY_MARGIN)
-                    continue;
-
-                int a1 = geomToAgent(model_, c.geom1, num_agents_);
-                int a2 = geomToAgent(model_, c.geom2, num_agents_);
-
-                if (a1 >= 0 && a2 >= 0 && a1 != a2)
-                {
-                    out_conflict.agent1 = a1;
-                    out_conflict.agent2 = a2;
-                    std::cout << t << std::endl;
-                    out_conflict.t = static_cast<int>(t);
-                    out_conflict.is_edge_conflict = false;
-
-                    std::cout << "[CBS] Conflict found: Agent " << a1 << " vs Agent " << a2
-                              << " at step " << t << " (alpha=" << alpha << ")" << std::endl;
-                    return true;
-                }
-            }
+            int step = std::min(t, paths[arm].size() - 1);
+            // std::cout << "got here ";
+            waypoint.push_back(paths[arm][step]);
+            // std:cout << "and got through" << std::endl;
         }
+        std::vector<std::pair<int, int>> collisions = isMultiArmCollision(waypoint, model_, data_plan_, joint_id_, body_to_arm_);
+        if (collisions.size() > 0)
+        {
+            auto [arm1, arm2] = collisions[0];
+            out_conflict.agent1 = arm1;
+            out_conflict.agent2 = arm2;
+            out_conflict.t = static_cast<int>(t);
+            out_conflict.is_edge_conflict = false;
+            return true;
+        }
+        // }
     }
     return false;
 }
@@ -296,8 +257,8 @@ std::vector<SingleArmNode *> CBSPlanner::get_successors(SingleArmNode *current)
 {
     // start with just doing single arm motions
     std::vector<SingleArmNode *> successors;
-    successors.push_back(new SingleArmNode(current->q, current->t+dt_));
-    double dq = 0.1; // 0.2 rads
+    successors.push_back(new SingleArmNode(current->q, current->t + dt_));
+    double dq = 0.05; // 0.2 rads
     for (int j = 0; j < current->q.size(); j++)
     {
         SingleArmNode *successor = new SingleArmNode(current->q, current->t + dt_);
@@ -345,7 +306,7 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
         int at_goal = true;
         for (int j = 0; j < q_goal.size(); j++)
         {
-            if (std::abs(curr_node->q[j] - q_goal[j]) < 0.01)
+            if (std::abs(curr_node->q[j] - q_goal[j]) > 0.05)
             {
                 at_goal = false;
             }
@@ -372,12 +333,10 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
         }
 
         std::vector<SingleArmNode *> successors = get_successors(curr_node);
-        // std::cout << "Number of Successors: " << successors.size() << std::endl;
         for (SingleArmNode *successor : successors)
         {
             if (isSingleArmCollision(successor->q, model_, data_plan_, agent_id, joint_id_, body_to_arm_) || violatesVertexConstraints(agent_id, successor->q, successor->t, all_constraints))
             {
-                // std::cout << "not valid, did not add" << std::endl;
                 continue;
             }
             if (!g_vals.count(successor) || g_vals[successor] > g_vals[curr_node] + 1) // just using unit cost
@@ -388,12 +347,8 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
                 }
                 g_vals[successor] = g_vals[curr_node] + 1;
                 successor->parents.push_back(curr_node);
-                double h = 0;
-                for (int j = 0; j < successor->q.size(); j++)
-                {
-                    h += std::abs(successor->q[j] - q_goal[j]);
-                }
-                open_list.push({g_vals[successor] + h, successor});
+                double h = heuristicL1(curr_node->q, q_goal);
+                open_list.push({g_vals[successor] + 100 * h, successor});
             }
         }
     }
@@ -405,109 +360,13 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
 
     if (success)
     {
+        std::cout << "Found path for agent " << agent_id << std::endl;
+        std::reverse(plan.begin(), plan.end());
         out_path = std::move(plan);
         return true;
     }
 
     return false;
-}
-
-// bool CBSPlanner::lowLevelPlan(int agent_id,
-//                               const JointConfig &q_start,
-//                               const JointConfig &q_goal,
-//                               const std::vector<Constraint> &all_constraints,
-//                               AgentPath &out_path)
-// {
-//     std::srand(static_cast<unsigned>(std::time(nullptr)) + agent_id); // Offset seed by agent
-
-//     std::vector<std::vector<double>> q_start_multi(num_agents_, std::vector<double>(dof_, 0.0));
-//     std::vector<std::vector<double>> q_goal_multi(num_agents_, std::vector<double>(dof_, 0.0));
-
-//     if ((int)start_configs_.size() == num_agents_)
-//     {
-//         for (int a = 0; a < num_agents_; ++a)
-//         {
-//             q_start_multi[a] = start_configs_[a];
-//             q_goal_multi[a] = start_configs_[a];
-//         }
-//     }
-
-//     q_start_multi[agent_id] = q_start;
-//     q_goal_multi[agent_id] = q_goal;
-
-//     Node start_node(q_start_multi, 0.0);
-//     Node goal_node(q_goal_multi, 1.0);
-
-//     // --- RETRY LOOP ---
-//     // Try RRT multiple times because it is random.
-//     const int MAX_RETRIES = 10;
-//     const int RRT_ITERS = 5000;
-//     const double STEP_SIZE = 0.5;
-
-//     for (int attempt = 0; attempt < MAX_RETRIES; ++attempt)
-//     {
-//         std::vector<Node *> rrt_path =
-//             rrtConnect(model_,
-//                        num_agents_,
-//                        dof_,
-//                        &start_node,
-//                        &goal_node,
-//                        RRT_ITERS,
-//                        STEP_SIZE,
-//                        agent_id);
-
-//         if (rrt_path.empty())
-//         {
-//             continue;
-//         }
-
-//         AgentPath candidate;
-//         candidate.reserve(rrt_path.size());
-//         bool extraction_ok = true;
-//         for (Node *n : rrt_path)
-//         {
-//             if ((int)n->q.size() <= agent_id)
-//             {
-//                 extraction_ok = false;
-//                 break;
-//             }
-//             candidate.push_back(n->q[agent_id]);
-//         }
-
-//         for (Node *n : rrt_path)
-//             delete n;
-
-//         if (!extraction_ok)
-//             continue;
-
-//         bool violation = false;
-//         for (size_t t = 0; t < candidate.size(); ++t)
-//         {
-//             const JointConfig &q = candidate[t];
-//             if (violatesVertexConstraints(agent_id, q, static_cast<int>(t), all_constraints))
-//             {
-//                 violation = true;
-//                 break;
-//             }
-//         }
-
-//         if (!violation)
-//         {
-//             out_path = std::move(candidate);
-//             return true;
-//         }
-//     }
-
-//     // If we tried MAX_RETRIES times and failed every time:
-//     // std::cerr << "[CBS] Failed to find valid low-level path for agent " << agent_id << " after retries.\n";
-//     return false;
-// }
-
-bool CBSPlanner::debugLowLevelPlan(int agent_id, const JointConfig &q_start, const JointConfig &q_goal, const std::vector<Constraint> &constraints, AgentPath &out_path)
-{
-    start_configs_.assign(num_agents_, std::vector<double>(dof_, 0.0));
-    start_configs_[agent_id] = q_start;
-    return lowLevelPlan(agent_id, q_start, q_goal, constraints, out_path);
 }
 
 std::vector<Node *> CBSPlanner::plan(const std::vector<std::vector<double>> &start_poses, const std::vector<std::vector<double>> &goal_poses)

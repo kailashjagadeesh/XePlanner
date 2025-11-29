@@ -228,7 +228,6 @@ vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_p
 {
     int num_actuators = joint_pos.size();
     int dof = joint_pos[0].size();
-
     // Set joint positions into qpos using jnt_qposadr
     for (int arm = 0; arm < num_actuators; ++arm)
     {
@@ -239,7 +238,6 @@ vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_p
             data->qpos[qadr] = joint_pos[arm][j];
         }
     }
-
     mj_fwdPosition(model, data);
 
     vector<pair<int, int>> collisions;
@@ -259,7 +257,6 @@ vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_p
             collisions.emplace_back(arm1, arm2);
         }
     }
-
     return collisions;
 }
 
