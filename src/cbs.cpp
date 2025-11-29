@@ -182,7 +182,7 @@ bool CBSPlanner::findFirstConflict(const MultiAgentPaths &paths, Conflict &out_c
     // In main.cpp, densifyPlan uses dt=0.01. Waypoints are t=0,1,2...
     // So there are 100 interpolation steps per waypoint interval.
     // We must check ALL of them to ensure no collisions in blind spots.
-    //const int INTERPOLATION_STEPS = 100;
+    // const int INTERPOLATION_STEPS = 100;
     int INTERPOLATION_STEPS = static_cast<int>(std::ceil(dt_ / sim_dt));
     const double SAFETY_MARGIN = 0.02; // 2cm extra buffer
 
@@ -208,7 +208,6 @@ bool CBSPlanner::findFirstConflict(const MultiAgentPaths &paths, Conflict &out_c
                     q_multi[agent][j] = (1.0 - alpha) * q_curr[j] + alpha * q_next[j];
                 }
             }
-
             setAllArmsQpos(model_, data_plan_, q_multi);
             mju_zero(data_plan_->qvel, model_->nv);
             mju_zero(data_plan_->qacc, model_->nv);
@@ -293,24 +292,24 @@ void CBSPlanner::expandNode(const std::shared_ptr<CTNode> &node,
         open.push(child_j);
 }
 
-std::vector<SingleArmNode*> CBSPlanner::get_successors(SingleArmNode* current)
+std::vector<SingleArmNode *> CBSPlanner::get_successors(SingleArmNode *current)
 {
     // start with just doing single arm motions
-    std::vector<SingleArmNode*> successors;
+    std::vector<SingleArmNode *> successors;
+    successors.push_back(new SingleArmNode(current->q, current->t+dt_));
     double dq = 0.1; // 0.2 rads
     for (int j = 0; j < current->q.size(); j++)
     {
-        SingleArmNode* successor = new SingleArmNode(current->q, current->t + dt_);
+        SingleArmNode *successor = new SingleArmNode(current->q, current->t + dt_);
         successor->q[j] += dq;
         successors.push_back(successor);
 
-        SingleArmNode* reverse_succesor = new SingleArmNode(current->q, current->t + dt_);
+        SingleArmNode *reverse_succesor = new SingleArmNode(current->q, current->t + dt_);
         reverse_succesor->q[j] -= dq;
         successors.push_back(reverse_succesor);
     }
     return successors;
 }
-
 
 bool CBSPlanner::lowLevelPlan(int agent_id,
                               const JointConfig &q_start,
@@ -318,33 +317,30 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
                               const std::vector<Constraint> &all_constraints,
                               AgentPath &out_path)
 {
-    std::priority_queue<std::pair<double, SingleArmNode*>, std::vector<std::pair<double, SingleArmNode*>>, std::greater<std::pair<double, SingleArmNode*>>> open_list;
-    std::unordered_set<SingleArmNode*, SingleArmNodeHasher, SingleArmNodeEqual> closed_set;
-    std::unordered_map<SingleArmNode*, double, SingleArmNodeHasher, SingleArmNodeEqual> g_vals;
+    std::priority_queue<std::pair<double, SingleArmNode *>, std::vector<std::pair<double, SingleArmNode *>>, std::greater<std::pair<double, SingleArmNode *>>> open_list;
+    std::unordered_set<SingleArmNode *, SingleArmNodeHasher, SingleArmNodeEqual> closed_set;
+    std::unordered_map<SingleArmNode *, double, SingleArmNodeHasher, SingleArmNodeEqual> g_vals;
 
-    SingleArmNode* start = new SingleArmNode(q_start, 0);
+    SingleArmNode *start = new SingleArmNode(q_start, 0);
     open_list.push({0.0, start});
     g_vals[start] = 0.0;
 
     int max_expansions = 100000;
     AgentPath plan;
     bool success = false;
+    std::vector<SingleArmNode *> nodes;
+    nodes.push_back(start);
     while (!open_list.empty())
     {
-        if (max_expansions == 0) break;
-        auto [f_val, curr_node] = open_list.top(); open_list.pop();
+        if (max_expansions == 0)
+            break;
+        auto [f_val, curr_node] = open_list.top();
+        open_list.pop();
 
-        if (closed_set.count(curr_node)) continue;
+        if (closed_set.count(curr_node))
+            continue;
         closed_set.insert(curr_node);
         max_expansions--;
-        if (max_expansions % 10000 == 0)
-        {
-            for (int j = 0; j < curr_node->q.size(); j++)
-            {
-                std::cout << curr_node->q[j] << " ";
-            }
-            std::cout << "\n";
-        }
 
         int at_goal = true;
         for (int j = 0; j < q_goal.size(); j++)
@@ -357,12 +353,12 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
         if (at_goal)
         {
             success = true;
-            SingleArmNode* current = curr_node;
+            SingleArmNode *current = curr_node;
             plan.push_back(current->q);
             while (current->parents.size() != 0)
             {
-                SingleArmNode* best_parent = nullptr;
-                for (SingleArmNode* parent : current->parents)
+                SingleArmNode *best_parent = nullptr;
+                for (SingleArmNode *parent : current->parents)
                 {
                     if (best_parent == nullptr || g_vals[parent] < g_vals[best_parent])
                     {
@@ -375,9 +371,9 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
             break;
         }
 
-        std::vector<SingleArmNode*> successors = get_successors(curr_node);
+        std::vector<SingleArmNode *> successors = get_successors(curr_node);
         // std::cout << "Number of Successors: " << successors.size() << std::endl;
-        for (SingleArmNode* successor : successors)
+        for (SingleArmNode *successor : successors)
         {
             if (isSingleArmCollision(successor->q, model_, data_plan_, agent_id, joint_id_, body_to_arm_) || violatesVertexConstraints(agent_id, successor->q, successor->t, all_constraints))
             {
@@ -386,6 +382,10 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
             }
             if (!g_vals.count(successor) || g_vals[successor] > g_vals[curr_node] + 1) // just using unit cost
             {
+                if (!g_vals.count(successor))
+                {
+                    nodes.push_back(successor);
+                }
                 g_vals[successor] = g_vals[curr_node] + 1;
                 successor->parents.push_back(curr_node);
                 double h = 0;
@@ -398,12 +398,17 @@ bool CBSPlanner::lowLevelPlan(int agent_id,
         }
     }
 
+    for (int i = 0; i < nodes.size(); i++)
+    {
+        delete nodes[i];
+    }
+
     if (success)
     {
         out_path = std::move(plan);
         return true;
     }
-    
+
     return false;
 }
 
