@@ -26,8 +26,11 @@ static double lasty = 0.0;
 static bool print_collisions = false;
 static bool last_collision = false;
 
-// static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
-static const vector<double> start_pose = {0.0, 0.0, 0.0, -1.5, 0.0, 1.5, 0.0};
+// --- POSE DEFINITIONS ---
+static const vector<double> START_POSE = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> END_POSE   = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
+static const vector<double> HOME_POSE = {0.0, -0.785, 0.0, -2.356, 0.0, 1.57, 0.785};
+static const vector<double> UPRIGHT_POSE = {0.0, 0.0, 0.0, -1.0, 0.0, 2.0, 0.8};
 
 static const int num_actuators = 4;
 static const double dt = 0.01;
@@ -136,85 +139,71 @@ int main()
     mjv_defaultScene(&scn);
     mjr_defaultContext(&con);
 
-    // set initial arm pose and gripper state
-    setArmsStartPose(m, d, start_pose);
-    setArmActuatorTargets(m, d, start_pose);
-    setGrippersOpen(m, d);
-    mj_forward(m, d);
-
     // create scene and context
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
-    std::vector<double> HOME_POSE = {
-        0.0,
-        -0.785398, // -45 degrees
-        0.0,
-        -2.35619, // -135 degrees
-        0.0,
-        1.57,    // 90 degrees
-        0.785398 // 45 degrees
-    };
+    // ----------------- CONFIGURATION SETUP ----------------- //
 
-    std::vector<double> UPRIGHT_POSE = {
-        0.0,
-        -0.5,
-        0.0,
-        -1.8,
-        0.0,
-        2.3,
-        0.8};
+    const int num_agents = 4;
+    const int dofs = static_cast<int>(START_POSE.size());
 
-    std::vector<double> EASY_POSE = {0.0, -0.785398, 0.0, -2.35619, 0.0, 1.57, 0.785398};
+    std::vector<std::vector<double>> start_poses(num_agents);
+    std::vector<std::vector<double>> goal_poses(num_agents);
 
-    // ----------------- CBS PLANNER SETUP ----------------- //
+    // Agent 1: Start -> End
+    start_poses[0] = START_POSE;
+    goal_poses[0] = END_POSE;
+
+    // Agent 2: End -> Start (Swap with Agent 1)
+    start_poses[1] = END_POSE;
+    goal_poses[1] = START_POSE;
+
+    // Agent 3: Home -> Upright
+    start_poses[2] = HOME_POSE;
+    goal_poses[2] = UPRIGHT_POSE;
+
+    // Agent 4: Upright -> Home (Swap with Agent 3)
+    start_poses[3] = UPRIGHT_POSE;
+    goal_poses[3] = HOME_POSE;
+
+    // Apply initial start poses to the simulation so visualizer starts correctly
+    setAllArmsQpos(m, d, start_poses);
+    mj_forward(m, d);
+
+    // ----------------- CBS PLANNER ----------------- //
     std::cout << "\n===== RUNNING FULL CBS PLANNER =====\n";
-
-    int num_agents = 1;
-    int dofs = start_pose.size();
+    std::cout << "Agent 0: Start -> End\n";
+    std::cout << "Agent 1: End -> Start\n";
+    std::cout << "Agent 2: Home -> Upright\n";
+    std::cout << "Agent 3: Upright -> Home\n";
 
     CBSPlanner planner(m, dq_max, dt, num_agents, dofs);
 
-    std::vector<std::vector<double>> start_poses(num_agents, EASY_POSE);
+    // Validate Start/Goal states
+    std::cout << "\n[DEBUG] Checking Validity:\n";
+    bool start_valid = isStateValid(m, d, start_poses, true);
+    std::cout << "Start Configuration Valid: " << (start_valid ? "YES" : "NO") << "\n";
 
-    // std::vector<double> end_pose = {0.0, -2.0, 0.0, -1.2, 0.5, 1.0, -1.0};
-    // std::vector<double> end_pose = {1.0, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0};
-    std::vector<std::vector<double>> goal_poses(num_agents, EASY_POSE);
-    // goal_poses[0][6] += 0.01;
+    bool goal_valid = isStateValid(m, d, goal_poses, true);
+    std::cout << "Goal Configuration Valid: " << (goal_valid ? "YES" : "NO") << "\n";
 
-    std::cout << "\n[DEBUG] Checking State Validity:\n";
-
-    // For single arm, check Agent 0 (index 0)
-    std::vector<std::vector<double>> start_q_multi(num_agents, EASY_POSE);
-    std::vector<std::vector<double>> goal_q_multi(num_agents, EASY_POSE);
-
-    for (int a = 1; a < num_agents; ++a)
+    if (!start_valid || !goal_valid)
     {
-        start_q_multi[a] = std::vector<double>(dofs, 0.0);
-        goal_q_multi[a] = std::vector<double>(dofs, 0.0);
+        std::cerr << "Error: Start or Goal configurations are in collision!\n";
     }
 
-    // Check start pose validity
-    bool start_valid = isStateValid(m, d, start_q_multi, true);
-    std::cout << "Start Pose is Valid: " << (start_valid ? "YES" : "NO") << "\n";
-
-    // Check goal pose validity
-    bool goal_valid = isStateValid(m, d, goal_q_multi, true);
-    std::cout << "Goal Pose is Valid: " << (goal_valid ? "YES" : "NO") << "\n";
-
     std::vector<Node *> plan = planner.plan(start_poses, goal_poses);
+
     if (plan.empty())
     {
         std::cerr << "[MAIN] CBS failed to find a plan.\n";
-        // clean up and exit
-        mjv_freeScene(&scn);
-        mjr_freeContext(&con);
-        mj_deleteData(d);
-        mj_deleteModel(m);
-        return 0;
+        plan.push_back(new Node(start_poses, 0.0));
     }
-
-    std::cout << "[MAIN] CBS returned plan with " << plan.size() << " waypoints\n";
+    else
+    {
+        std::cout << "[MAIN] CBS returned plan with " << plan.size() << " waypoints\n";
+    }
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
     // INPUT: vector<Node*> -> dim(num_waypoints)
@@ -229,6 +218,7 @@ int main()
     // --------------------------------------------------------------------------------------- //
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
+    printf("Dense trajectory steps: %zu\n", dense_plan.size());
 
     int dof = dense_plan[0]->q[0].size();
 

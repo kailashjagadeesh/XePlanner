@@ -1,140 +1,214 @@
 #include <mujoco/mujoco.h>
 #include <GLFW/glfw3.h>
-#include <iostream>
-#include <vector>
+#include <cstdio>
+#include <cstdlib>
 #include "utils.h"
 #include "rrt_connect.h"
+#include <stdexcept>
+#include <iostream>
+#include <algorithm>
 
 using namespace std;
 
-// --- Global Visualization Variables ---
-mjModel *m = NULL;
-mjData *d = NULL;
-mjvCamera cam;
-mjvOption opt;
-mjvScene scn;
-mjrContext con;
+mjModel *m = NULL; // MuJoCo model
+mjData *d = NULL;  // MuJoCo data
+mjvCamera cam;     // abstract camera
+mjvOption opt;     // visualization options
+mjvScene scn;      // abstract scene
+mjrContext con;    // custom GPU context
 
-// Mouse interaction
-bool mouse_left = false;
-bool mouse_right = false;
-bool mouse_middle = false;
-double lastx = 0, lasty = 0;
+static bool mouse_left = false;
+static bool mouse_right = false;
+static bool mouse_middle = false;
+static double lastx = 0.0;
+static double lasty = 0.0;
+static bool print_collisions = false;
+static bool last_collision = false;
 
-void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+static const vector<double> start_pose = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+
+static const int num_actuators = 4;
+static const double dt = 0.01;
+static const double dq_max = 3.142; // rad / s
+
+static double envOrDefault(const char *name, double fallback)
 {
-    if (button == GLFW_MOUSE_BUTTON_LEFT) mouse_left = action == GLFW_PRESS;
-    if (button == GLFW_MOUSE_BUTTON_RIGHT) mouse_right = action == GLFW_PRESS;
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE) mouse_middle = action == GLFW_PRESS;
-    glfwGetCursorPos(window, &lastx, &lasty);
+    const char *val = std::getenv(name);
+    if (!val || !*val)
+    {
+        return fallback;
+    }
+
+    char *end = nullptr;
+    double parsed = std::strtod(val, &end);
+    return (end == val) ? fallback : parsed;
 }
 
-void mouse_move_callback(GLFWwindow *window, double xpos, double ypos)
+static void configureCameraForModel(const mjModel *model, mjvCamera *camera)
 {
+    const double extent = mju_max(model->stat.extent, 1e-3);
+
+    camera->lookat[0] = model->stat.center[0];
+    camera->lookat[1] = model->stat.center[1];
+    camera->lookat[2] = model->stat.center[2];
+
+    camera->distance = envOrDefault("MJ_CAM_DISTANCE", 4.0 * extent);
+    camera->azimuth = envOrDefault("MJ_CAM_AZIMUTH", 90.0);
+    camera->elevation = envOrDefault("MJ_CAM_ELEVATION", -45.0);
+}
+
+static void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+{
+    (void)mods;
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT)
+        mouse_left = (action == GLFW_PRESS);
+    else if (button == GLFW_MOUSE_BUTTON_MIDDLE)
+        mouse_middle = (action == GLFW_PRESS);
+    else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+        mouse_right = (action == GLFW_PRESS);
+
+    if (mouse_left || mouse_middle || mouse_right)
+        glfwGetCursorPos(window, &lastx, &lasty);
+}
+
+static void mouse_move_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (!mouse_left && !mouse_middle && !mouse_right)
+        return;
+
     double dx = xpos - lastx;
     double dy = ypos - lasty;
-    lastx = xpos; lasty = ypos;
+    lastx = xpos;
+    lasty = ypos;
 
-    if (!mouse_left && !mouse_right && !mouse_middle) return;
-
-    int width, height;
+    int width = 1, height = 1;
     glfwGetWindowSize(window, &width, &height);
-    
-    if (mouse_left) mjv_moveCamera(m, mjMOUSE_ROTATE_H, dx/height, dy/height, &scn, &cam);
-    if (mouse_right) mjv_moveCamera(m, mjMOUSE_MOVE_H, dx/height, dy/height, &scn, &cam);
-    if (mouse_middle) mjv_moveCamera(m, mjMOUSE_ZOOM, dx/height, dy/height, &scn, &cam);
+    double scale = (height > 0) ? 1.0 / height : 1.0;
+
+    if (mouse_left)
+        mjv_moveCamera(m, mjMOUSE_ROTATE_H, scale * dx, scale * dy, &scn, &cam);
+    else if (mouse_right)
+        mjv_moveCamera(m, mjMOUSE_MOVE_H, scale * dx, scale * dy, &scn, &cam);
+    else if (mouse_middle)
+        mjv_moveCamera(m, mjMOUSE_ZOOM, scale * dx, scale * dy, &scn, &cam);
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    mjv_moveCamera(m, mjMOUSE_ZOOM, 0, -0.05 * yoffset, &scn, &cam);
+static void scroll_callback(GLFWwindow * /*window*/, double /*xoffset*/, double yoffset)
+{
+    mjv_moveCamera(m, mjMOUSE_ZOOM, 0.0, -0.05 * yoffset, &scn, &cam);
 }
 
 int main()
 {
-    // 1. Load Model
-    char error[1000] = "Could not load model";
-    m = mj_loadXML("../franka_emika_panda/scene.xml", 0, error, 1000);
-    if (!m) mju_error("Load error: %s", error);
+    char error[1000] = "Could Not Load Scene";
+    m = mj_loadXML("../franka_emika_panda/scene.xml", nullptr, error, sizeof(error));
+
+    if (!m)
+    {
+        mju_error("Load model error: %s", error);
+    }
+
     d = mj_makeData(m);
 
-    // 2. Init Visualization
-    if (!glfwInit()) mju_error("Could not init GLFW");
-    GLFWwindow *window = glfwCreateWindow(1200, 900, "RRT-Connect Single Arm", NULL, NULL);
+    // init GLFW
+    if (!glfwInit())
+    {
+        mju_error("Could not initialize GLFW");
+    }
+
+    // create window, make OpenGL context current, request v-sync
+    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, mouse_move_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
+    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
+
+    // initialize visualization data structures
     mjv_defaultCamera(&cam);
+    configureCameraForModel(m, &cam);
     mjv_defaultOption(&opt);
     mjv_defaultScene(&scn);
     mjr_defaultContext(&con);
+
+    // set initial arm pose and gripper state
+    setArmsStartPose(m, d, start_pose);
+    setArmActuatorTargets(m, d, start_pose);
+    setGrippersOpen(m, d);
+    mj_forward(m, d);
+
+    // create scene and context
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
 
-    // 3. Define Task
-    // Safe Home Pose
+    vector<double> end_pose = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
-    std::vector<double> start_q = {
-        0.0,
-        -0.785398, // -45 degrees
-        0.0,
-        -2.35619, // -135 degrees
-        0.0,
-        1.57,    // 90 degrees
-        0.785398 // 45 degrees
-    };
+    // Build start/goal nodes for the planner (same pose applied to all arms).
+    vector<vector<double>> start_poses(num_actuators, start_pose);
+    vector<vector<double>> end_poses(num_actuators, end_pose);
+    Node *start = new Node(start_poses, 0.0);
+    Node *goal = new Node(end_poses, 0.0);
 
-    std::vector<double> goal_q = {
-        0.0,
-        -0.5,
-        0.0,
-        -1.8,
-        0.0,
-        2.3,
-        0.8};
+    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
+    printf("Planning with RRT-Connect...\n");
+    // Run a simple RRT-Connect to get sparse waypoints, then densify them.
+    vector<Node *> plan = rrtConnect(
+        m,
+        num_actuators,
+        static_cast<int>(start_pose.size()),
+        start,
+        goal,
+        20000, //max_iters
+        0.6);//step_size
+    printf("Planning done. Sparse waypoints: %zu\n", plan.size());
 
-    // Set Environment to Start
-    vector<vector<double>> start_multi(4, vector<double>(7, 0.0));
-    start_multi[0] = start_q; 
-    setAllArmsQpos(m, d, start_multi);
-    mj_forward(m, d);
+    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
+    printf("Dense trajectory steps: %zu\n", dense_plan.size());
 
-    // 4. Run Planner
-    int agent_id = 0; // Plan for Agent 0
-    int num_agents = 1; // Total agents in scene
-    int dof = 7;
 
-    cout << "=== Running RRT-Connect ===" << endl;
-    RRTConnectPlanner planner(m, agent_id, dof, num_agents);
-    
-    vector<Node*> waypoints = planner.plan(start_q, goal_q);
+    int dof = dense_plan[0]->q[0].size();
 
-    if (waypoints.empty()) {
-        cout << "Planning failed!" << endl;
-        return 0;
+    // map arm, joint to location to control data index
+    vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_actuators; ++arm) {
+        for (int j = 0; j < dof; ++j) {
+            char name[64];
+            snprintf(name, sizeof(name), "panda%d_actuator%d", arm+1, j+1);
+            int id = mj_name2id(m, mjOBJ_ACTUATOR, name); // returns -1 if not found
+            if (id == -1) throw runtime_error("Error: Could not find actuator id");
+            act_id[arm][j] = id;
+        }
     }
+    
+    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
 
-    // 5. Densify Path for Playback
-    double dt_playback = 0.01;
-    vector<Node*> trajectory = densifyPlan(waypoints, dt_playback);
-
-    // 6. Playback Loop
     while (!glfwWindowShouldClose(window))
     {
-        double time = d->time;
-        int step = min((int)(time / dt_playback), (int)trajectory.size() - 1);
+        mj_step1(m, d);
+        double t_sim = d->time;
 
-        // Control Agent 0 based on plan
-        vector<double> current_q = trajectory[step]->q[0];
-        
-        // Map to control inputs
-        for(int j=0; j<7; ++j) {
-            int id = mj_name2id(m, mjOBJ_ACTUATOR, ("panda1_actuator" + to_string(j+1)).c_str());
-            if(id != -1) d->ctrl[id] = current_q[j];
+        int t = min(static_cast<int>(t_sim / dt), static_cast<int>(dense_plan.size() - 1));
+        Node* curr_node = dense_plan[t];
+        for (int arm = 0; arm < curr_node->q.size(); arm++)
+        {
+            for (int j = 0; j < dof; j++)
+            {
+                int id = act_id[arm][j];
+                d->ctrl[id] = curr_node->q[arm][j];
+            }
+        }
+        mj_step2(m, d);
+
+        bool collision = hasCollision(m, d, print_collisions);
+        if (!print_collisions && collision && !last_collision)
+        {
+            printf("Collision detected\n");
         }
 
-        mj_step(m, d);
+        last_collision = collision;
 
         mjrRect viewport = {0, 0, 0, 0};
         glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
@@ -144,11 +218,12 @@ int main()
         glfwPollEvents();
     }
 
-    mj_deleteData(d);
-    mj_deleteModel(m);
+    // free visualization storage
     mjv_freeScene(&scn);
     mjr_freeContext(&con);
-    glfwTerminate();
 
+    // free MuJoCo model and data
+    mj_deleteData(d);
+    mj_deleteModel(m);
     return 0;
 }

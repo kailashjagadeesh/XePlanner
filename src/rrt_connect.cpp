@@ -1,233 +1,200 @@
 #include "rrt_connect.h"
-#include <iostream>
 #include <algorithm>
-#include <random>
-#include <limits>
+#include <cmath>
+#include <cstdlib>
+#include <cstdio>
 
-using namespace std;
-
-RRTConnectPlanner::RRTConnectPlanner(mjModel *model, int agent_id, int dof, int num_agents)
-    : model_(model), agent_id_(agent_id), dof_(dof), num_agents_(num_agents)
+using std::vector;
+struct TreeNode
 {
-    // Create a separate mjData for planning to avoid thread conflicts with visualization
-    data_ = mj_makeData(model);
-    
-    // ROBUST PARAMETERS
-    step_size_ = 0.5;      // Large step size for faster exploration
-    max_nodes_ = 50000;    // High node limit
-    goal_bias_ = 0.10;     // 10% chance to sample goal
-    goal_tolerance_ = 0.05;
+    Node *cfg;
+    TreeNode *parent;
+};
+
+static vector<double> flatten(const vector<vector<double>> &q)
+{
+    vector<double> flat;
+    for (const auto &arm : q)
+        flat.insert(flat.end(), arm.begin(), arm.end());
+    return flat;
 }
-
-RRTConnectPlanner::~RRTConnectPlanner()
+static double distance(const vector<vector<double>> &a, const vector<vector<double>> &b)
 {
-    if (data_)
-        mj_deleteData(data_);
-}
-
-double RRTConnectPlanner::distance(const vector<double> &q1, const vector<double> &q2)
-{
-    double d = 0.0;
-    for (int i = 0; i < dof_; ++i)
-        d += fabs(q1[i] - q2[i]);
-    return d;
-}
-
-vector<double> RRTConnectPlanner::sample(const vector<double>& goal)
-{
-    vector<double> q(dof_);
-    
-    // Goal biasing
-    if ((double)rand() / RAND_MAX < goal_bias_)
+    auto fa = flatten(a);
+    auto fb = flatten(b);
+    double sum = 0.0;
+    for (size_t i = 0; i < fa.size(); ++i)
     {
-        return goal;
+        double d = fa[i] - fb[i];
+        sum += d * d;
     }
+    return std::sqrt(sum);
+}
 
-    // Uniform sampling [-pi, pi]
-    for (int i = 0; i < dof_; ++i)
+static bool isConfigValid(mjModel *model, mjData *data, const vector<vector<double>> &q, int agent_id)
+{
+    return isStateValid(model, data, q, false, agent_id);
+}
+
+static Node *sampleRandom(int num_actuators, int dof, int agent_id, const vector<vector<double>> &fixed_q)
+{
+    vector<vector<double>> q(num_actuators, vector<double>(dof, 0.0));
+    const double qmin = -2.8;
+    const double qmax = 2.8;
+    for (int arm = 0; arm < num_actuators; ++arm)
     {
-        double r = (double)rand() / RAND_MAX;
-        q[i] = -3.14159 + r * (2.0 * 3.14159);
-    }
-    return q;
-}
-
-vector<double> RRTConnectPlanner::steer(const vector<double> &from, const vector<double> &to)
-{
-    double d = distance(from, to);
-    if (d < step_size_)
-        return to;
-
-    vector<double> new_q(dof_);
-    for (int i = 0; i < dof_; ++i)
-    {
-        double dir = to[i] - from[i];
-        new_q[i] = from[i] + (dir / d) * step_size_;
-    }
-    return new_q;
-}
-
-bool RRTConnectPlanner::isValid(const vector<double>& q)
-{
-    // Build multi-agent config: Target agent gets 'q', others get 0.0 (Safe Pose)
-    vector<vector<double>> q_multi(num_agents_, vector<double>(dof_, 0.0));
-    q_multi[agent_id_] = q;
-
-    return isStateValid(model_, data_, q_multi, false);
-}
-
-bool RRTConnectPlanner::isEdgeFree(const vector<double>& q_start, const vector<double>& q_end)
-{
-    // Build multi-agent config
-    vector<vector<double>> q_multi_start(num_agents_, vector<double>(dof_, 0.0));
-    vector<vector<double>> q_multi_end(num_agents_, vector<double>(dof_, 0.0));
-    
-    q_multi_start[agent_id_] = q_start;
-    q_multi_end[agent_id_] = q_end;
-
-    // Check 5 sub-steps along the edge
-    return isEdgeValid(model_, data_, q_multi_start, q_multi_end, 5, false);
-}
-
-int RRTConnectPlanner::extend(vector<RRTNode> &tree, const vector<double> &q_target)
-{
-    // 1. Find Nearest
-    int nearest_idx = -1;
-    double min_dist = std::numeric_limits<double>::infinity();
-
-    for (size_t i = 0; i < tree.size(); ++i)
-    {
-        double d = distance(tree[i].q, q_target);
-        if (d < min_dist)
+        if (agent_id != -1 && arm != agent_id)
         {
-            min_dist = d;
-            nearest_idx = i;
+            q[arm] = fixed_q[arm];
+            continue;
+        }
+        for (int j = 0; j < dof; ++j)
+        {
+            double u = static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX);
+            q[arm][j] = qmin + u * (qmax - qmin);
         }
     }
-
-    // 2. Steer
-    vector<double> q_new = steer(tree[nearest_idx].q, q_target);
-
-    // 3. Check Collision (Node + Edge)
-    if (!isValid(q_new)) return -1;
-    if (!isEdgeFree(tree[nearest_idx].q, q_new)) return -1;
-
-    // 4. Add to Tree
-    tree.emplace_back(q_new, nearest_idx);
-    return tree.size() - 1;
+    return new Node(q, 0.0);
 }
 
-bool RRTConnectPlanner::connect(vector<RRTNode> &tree, const vector<double> &q_target, int &connection_idx)
+static Node *connect(const Node *from, const Node *to, double step_size)
 {
-    vector<double> q_curr = q_target;
-    
-    while (true)
+    double dist = distance(from->q, to->q);
+    if (dist <= step_size)
+        return new Node(to->q, 0.0);
+    double alpha = step_size / dist;
+    int num_actuators = from->q.size();
+    int dof = from->q[0].size();
+    vector<vector<double>> q(num_actuators, vector<double>(dof, 0.0));
+    for (int arm = 0; arm < num_actuators; ++arm)
     {
-        int new_idx = extend(tree, q_curr);
-        
-        if (new_idx == -1) 
-        {
-            // Extension failed (collision)
-            return false; 
-        }
-
-        // Check if we reached the target configuration
-        if (distance(tree[new_idx].q, q_target) < 1e-3) // Close enough to specific target point
-        {
-            connection_idx = new_idx;
-            return true;
-        }
-        
-        // Update current target to be the node we just added (though steer handles direction)
-        // Actually, extend takes a target and steers towards it. 
-        // To "Connect", we keep extending towards the *original* target.
-        // If we reached the target via steer, extend returns the node at q_target.
-        
-        // Simply: if extend succeeded, check if we are at the goal
-        if (distance(tree[new_idx].q, q_target) < step_size_)
-        {
-             // One more step might land us there, or we are close enough
-             // Let's force a final check/add if needed, or accept tolerance
-             connection_idx = new_idx;
-             return true;
-        }
+        for (int j = 0; j < dof; ++j)
+            q[arm][j] = from->q[arm][j] + alpha * (to->q[arm][j] - from->q[arm][j]);
     }
+    return new Node(q, 0.0);
 }
 
-std::vector<Node *> RRTConnectPlanner::plan(const std::vector<double> &start_conf, const std::vector<double> &goal_conf)
+static bool edgeCollisionFree(mjModel *model, mjData *data, const Node *a, const Node *b, double step_size, int agent_id)
 {
-    srand(time(0));
-    
-    if (!isValid(start_conf) || !isValid(goal_conf))
+    double dist = distance(a->q, b->q);
+    int steps = std::max(1, static_cast<int>(std::ceil(dist / step_size)));
+    for (int k = 0; k <= steps; ++k)
     {
-        cout << "[RRT] Error: Start or Goal is invalid!" << endl;
-        return {};
+        double alpha = static_cast<double>(k) / static_cast<double>(steps);
+        Node interp(a->q, 0.0);
+        int num_actuators = a->q.size();
+        int dof = a->q[0].size();
+        for (int arm = 0; arm < num_actuators; ++arm)
+        {
+            for (int j = 0; j < dof; ++j)
+                interp.q[arm][j] = (1.0 - alpha) * a->q[arm][j] + alpha * b->q[arm][j];
+        }
+        if (!isConfigValid(model, data, interp.q, agent_id))
+            return false;
+    }
+    return true;
+}
+
+enum ExtendStatus
+{
+    Trapped,
+    Advanced,
+    Reached
+};
+
+static TreeNode *nearest(const vector<TreeNode *> &tree, const Node *target)
+{
+    TreeNode *best = nullptr;
+    double best_dist = 1e9;
+    for (TreeNode *n : tree)
+    {
+        double d = distance(n->cfg->q, target->q);
+        if (d < best_dist)
+        {
+            best_dist = d;
+            best = n;
+        }
+    }
+    return best;
+}
+
+static ExtendStatus extend(TreeNode *&new_node, vector<TreeNode *> &tree, const Node *target, mjModel *model, mjData *data, double step_size, int agent_id)
+{
+    TreeNode *nearest_node = nearest(tree, target);
+    Node *stepped = connect(nearest_node->cfg, target, step_size);
+
+    if (!edgeCollisionFree(model, data, nearest_node->cfg, stepped, step_size, agent_id))
+    {
+        delete stepped;
+        return Trapped;
+    }
+    new_node = new TreeNode{stepped, nearest_node};
+    tree.push_back(new_node);
+    if (distance(stepped->q, target->q) < 1e-3)
+        return Reached;
+    return Advanced;
+}
+
+static vector<Node *> buildPath(TreeNode *a, TreeNode *b, const Node *exact_goal)
+{
+    vector<Node *> path_a;
+    for (TreeNode *n = a; n; n = n->parent)
+        path_a.push_back(new Node(n->cfg->q, 0.0));
+    std::reverse(path_a.begin(), path_a.end());
+
+    vector<Node *> path_b;
+    for (TreeNode *n = b; n; n = n->parent)
+        path_b.push_back(new Node(n->cfg->q, 0.0));
+
+    if (!path_b.empty())
+        path_b.pop_back();
+
+    std::reverse(path_b.begin(), path_b.end());
+
+    path_a.insert(path_a.end(), path_b.begin(), path_b.end());
+
+    if (!path_a.empty())
+    {
+        // Overwrite the last configuration with the exact goal configuration
+        path_a.back()->q = exact_goal->q;
     }
 
-    // Tree A (Start), Tree B (Goal)
-    vector<RRTNode> tree_a; 
-    vector<RRTNode> tree_b;
-    tree_a.reserve(max_nodes_);
-    tree_b.reserve(max_nodes_);
+    for (size_t i = 0; i < path_a.size(); ++i)
+        path_a[i]->t = static_cast<double>(i);
 
-    tree_a.emplace_back(start_conf, -1);
-    tree_b.emplace_back(goal_conf, -1);
+    return path_a;
+}
 
-    cout << "[RRT] Planning started..." << endl;
+vector<Node *> rrtConnect(mjModel *model, int num_actuators, int dof, const Node *start, const Node *goal, int max_iters, double step_size, int agent_id)
+{
+    mjData *data = mj_makeData(model);
+    vector<TreeNode *> Ta, Tb;
+    Ta.push_back(new TreeNode{new Node(start->q, 0.0), nullptr});
+    Tb.push_back(new TreeNode{new Node(goal->q, 0.0), nullptr});
 
-    for (int k = 0; k < max_nodes_; ++k)
+    for (int iter = 0; iter < max_iters; ++iter)
     {
-        // 1. Sample
-        vector<double> q_rand = sample(goal_conf); // Passing goal just for bias reference if needed
+        Node *q_rand = sampleRandom(num_actuators, dof, agent_id, start->q);
+        TreeNode *a_new = nullptr;
 
-        // 2. Extend A
-        int idx_a = extend(tree_a, q_rand);
-
-        if (idx_a != -1) // If A extended successfully
+        if (extend(a_new, Ta, q_rand, model, data, step_size, agent_id) != Trapped)
         {
-            // 3. Connect B to A's new node
-            int idx_b = -1;
-            // Try to connect Tree B to the specific configuration added to Tree A
-            if (connect(tree_b, tree_a[idx_a].q, idx_b))
+            TreeNode *b_new = nullptr;
+            ExtendStatus status = Advanced;
+            while (status == Advanced)
+                status = extend(b_new, Tb, a_new->cfg, model, data, step_size, agent_id);
+            if (status == Reached)
             {
-                cout << "[RRT] Path found at iter " << k << "! Nodes: " << tree_a.size() + tree_b.size() << endl;
-
-                // Reconstruct Path
-                // Path A: Start -> ... -> idx_a
-                vector<vector<double>> full_path_q;
-                
-                int curr = idx_a;
-                while(curr != -1) {
-                    full_path_q.push_back(tree_a[curr].q);
-                    curr = tree_a[curr].parent_index;
-                }
-                std::reverse(full_path_q.begin(), full_path_q.end());
-
-                // Path B: Goal -> ... -> idx_b (connect point)
-                curr = idx_b;
-                while(curr != -1) {
-                    full_path_q.push_back(tree_b[curr].q);
-                    curr = tree_b[curr].parent_index;
-                }
-
-                // Convert to Node* format for main.cpp
-                vector<Node*> result;
-                for(const auto& q : full_path_q)
-                {
-                    // Convert single-agent config to multi-agent config (others at 0)
-                    vector<vector<double>> q_multi(num_agents_, vector<double>(dof_, 0.0));
-                    q_multi[agent_id_] = q;
-                    // Time is dummy here, densifyPlan handles it
-                    result.push_back(new Node(q_multi, 0.0));
-                }
-                return result;
+                vector<Node *> path = buildPath(a_new, b_new, start);
+                delete q_rand;
+                mj_deleteData(data);
+                return path;
             }
         }
-
-        // 4. Swap Trees
-        std::swap(tree_a, tree_b);
+        delete q_rand;
+        std::swap(Ta, Tb);
     }
-
-    cout << "[RRT] Failed to find path." << endl;
+    std::printf("RRT-Connect: no path after %d iterations\n", max_iters);
+    mj_deleteData(data);
     return {};
 }

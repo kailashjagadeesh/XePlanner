@@ -19,6 +19,7 @@ add_executable(XePlanner
     src/main.cpp 
     src/utils.cpp
     src/cbs.cpp
+    src/rrt_connect.cpp
 )
 
 add_executable(RRTPlanner 
