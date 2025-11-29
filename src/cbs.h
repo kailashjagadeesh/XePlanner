@@ -5,6 +5,8 @@
 #include <queue>
 #include <memory>
 #include "utils.h"
+#include <unordered_set>
+#include <unordered_map>
 
 enum class ConstraintType
 {
@@ -56,6 +58,53 @@ struct CTNodeCompare
     }
 };
 
+struct SingleArmNode
+{
+    JointConfig q;
+    double t;
+    std::vector<SingleArmNode *> parents;
+    SingleArmNode(const std::vector<double> &q_, double t_) : q(q_), t(t_) {}
+};
+
+struct SingleArmNodeHasher
+{
+    std::size_t operator()(const SingleArmNode *n) const noexcept
+    {
+        std::size_t h = 0;
+        std::hash<double> dh;
+
+        for (double q : n->q)
+        {
+            // Combine hashes
+            h ^= dh(q) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        }
+
+        // Include time
+        h ^= dh(n->t) + 0x9e3779b9 + (h << 6) + (h >> 2);
+
+        return h;
+    }
+};
+
+struct SingleArmNodeEqual
+{
+    bool operator()(const SingleArmNode *a, const SingleArmNode *b) const noexcept
+    {
+        if (a->q.size() != b->q.size())
+            return false;
+        if (a->t != b->t)
+            return false;
+
+        for (size_t i = 0; i < a->q.size(); ++i)
+        {
+            if (a->q[i] != b->q[i])
+                return false;
+        }
+
+        return true;
+    }
+};
+
 class CBSPlanner
 {
 public:
@@ -63,7 +112,9 @@ public:
                double dq_max,
                double dt,
                int num_agents,
-               int dof);
+               int dof,
+               std::vector<int> &body_to_arm,
+               std::vector<std::vector<int>> &joint_id);
 
     ~CBSPlanner();
 
@@ -72,10 +123,10 @@ public:
                              const std::vector<std::vector<double>> &goal_poses);
 
     bool debugLowLevelPlan(int agent_id,
-                      const JointConfig &q_start,
-                      const JointConfig &q_goal,
-                      const std::vector<Constraint> &constraints,
-                      AgentPath &out_path);
+                           const JointConfig &q_start,
+                           const JointConfig &q_goal,
+                           const std::vector<Constraint> &constraints,
+                           AgentPath &out_path);
 
 private:
     bool findFirstConflict(const MultiAgentPaths &paths, Conflict &out_conflict);
@@ -91,6 +142,8 @@ private:
                       const JointConfig &q_goal,
                       const std::vector<Constraint> &constraints,
                       AgentPath &out_path);
+
+    std::vector<SingleArmNode*> get_successors(SingleArmNode* current);
 
     // Utility: extract constraints relevant to one agent.
     std::vector<Constraint> getConstraintsForAgent(int agent_id, const std::vector<Constraint> &all_constraints) const;
@@ -108,6 +161,8 @@ private:
     double dt_;
     int num_agents_;
     int dof_;
+    std::vector<int> body_to_arm_;
+    std::vector<std::vector<int>> joint_id_;
 
     std::vector<JointConfig> start_configs_;
     std::vector<JointConfig> goal_configs_;

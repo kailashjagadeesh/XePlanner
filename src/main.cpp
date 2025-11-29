@@ -28,7 +28,7 @@ static bool last_collision = false;
 
 // --- POSE DEFINITIONS ---
 static const vector<double> START_POSE = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
-static const vector<double> END_POSE   = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
+static const vector<double> END_POSE = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
 static const vector<double> HOME_POSE = {0.0, -0.785, 0.0, -2.356, 0.0, 1.57, 0.785};
 static const vector<double> UPRIGHT_POSE = {0.0, 0.0, 0.0, -1.0, 0.0, 2.0, 0.8};
 
@@ -171,6 +171,37 @@ int main()
     setAllArmsQpos(m, d, start_poses);
     mj_forward(m, d);
 
+    int dof = start_poses[0].size();
+
+    // map arm, joint to location to control data index
+    vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        for (int j = 0; j < dof; ++j)
+        {
+            char name[64];
+            snprintf(name, sizeof(name), "panda%d_actuator%d", arm + 1, j + 1);
+            int id = mj_name2id(m, mjOBJ_ACTUATOR, name); // returns -1 if not found
+            if (id == -1)
+                throw runtime_error("Error: Could not find actuator id");
+            act_id[arm][j] = id;
+        }
+    }
+    vector<vector<int>> joint_id(num_actuators, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        for (int j = 0; j < dof; ++j)
+        {
+            char name[64];
+            snprintf(name, sizeof(name), "panda%d_joint%d", arm + 1, j + 1);
+            int jid = mj_name2id(m, mjOBJ_JOINT, name);
+            if (jid < 0)
+                throw runtime_error("Could not find joint");
+            joint_id[arm][j] = jid;
+        }
+    }
+    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
+
     // ----------------- CBS PLANNER ----------------- //
     std::cout << "\n===== RUNNING FULL CBS PLANNER =====\n";
     std::cout << "Agent 0: Start -> End\n";
@@ -178,7 +209,7 @@ int main()
     std::cout << "Agent 2: Home -> Upright\n";
     std::cout << "Agent 3: Upright -> Home\n";
 
-    CBSPlanner planner(m, dq_max, dt, num_agents, dofs);
+    CBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id);
 
     // Validate Start/Goal states
     std::cout << "\n[DEBUG] Checking Validity:\n";
@@ -220,22 +251,7 @@ int main()
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
     printf("Dense trajectory steps: %zu\n", dense_plan.size());
 
-    int dof = dense_plan[0]->q[0].size();
-
-    // map arm, joint to location to control data index
-    vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm)
-    {
-        for (int j = 0; j < dof; ++j)
-        {
-            char name[64];
-            snprintf(name, sizeof(name), "panda%d_actuator%d", arm + 1, j + 1);
-            int id = mj_name2id(m, mjOBJ_ACTUATOR, name); // returns -1 if not found
-            if (id == -1)
-                throw runtime_error("Error: Could not find actuator id");
-            act_id[arm][j] = id;
-        }
-    }
+    //int dof = dense_plan[0]->q[0].size();
 
     while (!glfwWindowShouldClose(window))
     {
