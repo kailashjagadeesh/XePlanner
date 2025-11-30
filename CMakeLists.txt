@@ -18,7 +18,7 @@ include_directories(${MUJOCO_INCLUDE_DIR})
 add_executable(XePlanner 
     src/main.cpp 
     src/utils.cpp
-    src/cbs.cpp
+    src/ecbs.cpp
     src/rrt_connect.cpp
 )
 

@@ -7,7 +7,7 @@
 #include <iostream>
 #include <algorithm>
 
-#include "cbs.h"
+#include "ecbs.h"
 
 using namespace std;
 
@@ -202,14 +202,14 @@ int main()
     }
     auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
 
-    // ----------------- CBS PLANNER ----------------- //
-    std::cout << "\n===== RUNNING FULL CBS PLANNER =====\n";
+    // ----------------- ECBS PLANNER ----------------- //
+    std::cout << "\n===== RUNNING FULL ECBS PLANNER =====\n";
     std::cout << "Agent 0: Start -> End\n";
     std::cout << "Agent 1: End -> Start\n";
     std::cout << "Agent 2: Home -> Upright\n";
     std::cout << "Agent 3: Upright -> Home\n";
 
-    CBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id);
+    ECBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id, 1.5);
 
     // Validate Start/Goal states
     std::cout << "\n[DEBUG] Checking Validity:\n";
@@ -228,12 +228,12 @@ int main()
 
     if (plan.empty())
     {
-        std::cerr << "[MAIN] CBS failed to find a plan.\n";
+        std::cerr << "[MAIN] ECBS failed to find a plan.\n";
         plan.push_back(new Node(start_poses, 0.0));
     }
     else
     {
-        std::cout << "[MAIN] CBS returned plan with " << plan.size() << " waypoints\n";
+        std::cout << "[MAIN] ECBS returned plan with " << plan.size() << " waypoints\n";
     }
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
