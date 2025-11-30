@@ -13,6 +13,10 @@ sudo ldconfig
 sudo apt install libglfw3 libglfw3-dev
 ```
 
+To run the planners, build the workspace and run
+``` ./CBSPlanner ``` for CBS planner
+``` ./ECBSPlanner ``` for ECBS planner
+``` ./RRTPlanner ``` for RRT-Connect planner
 
 Franka Panda Model Adapated From:
 https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_emika_panda

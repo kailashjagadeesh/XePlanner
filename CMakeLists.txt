@@ -15,10 +15,17 @@ find_package(glfw3 REQUIRED)
 
 include_directories(${MUJOCO_INCLUDE_DIR})
 
-add_executable(XePlanner 
-    src/main.cpp 
+add_executable(ECBSPlanner 
+    src/main_ecbs.cpp 
     src/utils.cpp
     src/ecbs.cpp
+    src/rrt_connect.cpp
+)
+
+add_executable(CBSPlanner 
+    src/main_cbs.cpp 
+    src/utils.cpp
+    src/cbs.cpp
     src/rrt_connect.cpp
 )
 
@@ -29,6 +36,7 @@ add_executable(RRTPlanner
 )
 
 # Dynamic link
-target_link_libraries(XePlanner ${MUJOCO_LIBRARY} glfw)
+target_link_libraries(ECBSPlanner ${MUJOCO_LIBRARY} glfw)
+target_link_libraries(CBSPlanner ${MUJOCO_LIBRARY} glfw)
 
 target_link_libraries(RRTPlanner ${MUJOCO_LIBRARY} glfw)

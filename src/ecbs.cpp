@@ -515,7 +515,7 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
         if (!has_conflict)
         {
             std::cout << "[ECBS] Found conflict-free solution with cost " << best_focal_node->cost 
-                     << " (suboptimality: " << (best_cost_ > 0 ? (node->cost / best_cost_) : 1.0) << ") after " << iter << " iterations.\n";
+                     << " (suboptimality: " << (best_cost_ > 0 ? (best_focal_node->cost / best_cost_) : 1.0) << ") after " << iter << " iterations.\n";
             return buildNodeTrajectory(best_focal_node->paths);
         }
 
