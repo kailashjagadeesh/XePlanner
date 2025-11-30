@@ -395,7 +395,6 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
     root->cost = computeTotalCost(root->paths);
     root->depth = 0;
 
-    // ECBS: Use priority queue for OPEN (sorted by cost)
     std::priority_queue<shared_ptr<CTNode>, std::vector<shared_ptr<CTNode>>, CTNodeCompare> open;
     open.push(root);
     
@@ -414,13 +413,16 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
         double focal_threshold = suboptimal_factor_ * best_cost_;
         std::vector<shared_ptr<CTNode>> focal;
         
-        // Extract all nodes in focal set from OPEN
-        // Note: We need to temporarily store and re-insert nodes
+        // Extract all nodes in focal set from OPEN, track minimum cost
         std::vector<shared_ptr<CTNode>> temp_storage;
+        double min_cost_in_open = std::numeric_limits<double>::max();
+
         while (!open.empty())
         {
             auto node = open.top();
             open.pop();
+
+            min_cost_in_open = std::min(min_cost_in_open, node->cost);
             
             if (node->cost <= focal_threshold)
             {
@@ -432,13 +434,19 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
             }
         }
         
+        // Update best_cost_ with the actual minimum from OPEN
+        if (min_cost_in_open < std::numeric_limits<double>::max())
+        {
+            best_cost_ = std::min(best_cost_, min_cost_in_open);
+        }
+
         // Re-insert nodes not in focal set
         for (auto node : temp_storage)
         {
             open.push(node);
         }
 
-        // If focal set is empty, expand from OPEN (fallback to best node)
+        // If focal set is empty, expand from OPEN
         if (focal.empty())
         {
             if (open.empty())
@@ -453,7 +461,7 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
             if (!has_conflict)
             {
                 std::cout << "[ECBS] Found conflict-free solution with cost " << node->cost 
-                         << " (suboptimality: " << (node->cost / best_cost_) << ") after " << iter << " iterations.\n";
+                         << " (suboptimality: " << (best_cost_ > 0 ? (node->cost / best_cost_) : 1.0) << ") after " << iter << " iterations.\n";
                 return buildNodeTrajectory(node->paths);
             }
 
