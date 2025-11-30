@@ -30,7 +30,7 @@ vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim);
 int geomToAgent(const mjModel* model, int geom_id, int num_agents);
 
 bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjData *data, int arm, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
-vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
-vector<pair<int, int>> isMultiArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm);
+vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol);
+vector<pair<int, int>> isMultiArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol);
 vector<vector<int>> buildBodyChildren(const mjModel *model);
 vector<int> bodyToArm(const vector<vector<int>> &act_id, const mjModel *model, int num_actuators, int dof);

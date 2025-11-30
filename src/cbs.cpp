@@ -103,54 +103,19 @@ std::vector<Node *> CBSPlanner::buildNodeTrajectory(const MultiAgentPaths &paths
     traj.reserve(T_max);
 
     double current_time = 0.0;
-
-    if (T_max > 0)
+    for (int t = 0; t < T_max - 1; t++)
     {
-        std::vector<std::vector<double>> q_multi(num_agents_, std::vector<double>(dof_, 0.0));
-        for (int agent = 0; agent < num_agents_; ++agent)
+        std::vector<std::vector<double>> q_multi;
+        for (int arm = 0; arm < paths.size(); arm++)
         {
-            if (!paths[agent].empty())
-                q_multi[agent] = paths[agent][0];
+            int step = std::min(t, static_cast<int>(paths[arm].size() - 1));
+            q_multi.push_back(paths[arm][step]);
         }
         Node *node = new Node(q_multi, current_time);
+        current_time += dt_;
         traj.push_back(node);
     }
 
-    for (size_t t = 0; t < T_max - 1; ++t)
-    {
-        double max_duration = dt_;
-
-        for (int agent = 0; agent < num_agents_; ++agent)
-        {
-            const auto &path = paths[agent];
-            if (t + 1 < path.size())
-            {
-                const JointConfig &q_curr = path[t];
-                const JointConfig &q_next = path[t + 1];
-                double max_disp = 0.0;
-                for (int j = 0; j < dof_; ++j)
-                {
-                    double d = std::fabs(q_next[j] - q_curr[j]);
-                    if (d > max_disp)
-                        max_disp = d;
-                }
-                double duration = max_disp / dq_max_;
-                if (duration > max_duration)
-                    max_duration = duration;
-            }
-        }
-        current_time += max_duration;
-
-        std::vector<std::vector<double>> q_multi(num_agents_, std::vector<double>(dof_, 0.0));
-        for (int agent = 0; agent < num_agents_; ++agent)
-        {
-            const auto &path = paths[agent];
-            const JointConfig &q = (t + 1 < path.size()) ? path[t + 1] : path.back();
-            q_multi[agent] = q;
-        }
-        Node *node = new Node(q_multi, current_time);
-        traj.push_back(node);
-    }
     return traj;
 }
 
@@ -176,19 +141,15 @@ bool CBSPlanner::findFirstConflict(const MultiAgentPaths &paths, Conflict &out_c
     if (T_max == 0)
         return false;
 
-    // assumption is that sim_dt and dt match for this CBS
-
     for (size_t t = 0; t < T_max; ++t)
     {
         std::vector<std::vector<double>> waypoint;
         for (int arm = 0; arm < paths.size(); arm++)
         {
             int step = std::min(t, paths[arm].size() - 1);
-            // std::cout << "got here ";
             waypoint.push_back(paths[arm][step]);
-            // std:cout << "and got through" << std::endl;
         }
-        std::vector<std::pair<int, int>> collisions = isMultiArmCollision(waypoint, model_, data_plan_, joint_id_, body_to_arm_);
+        std::vector<std::pair<int, int>> collisions = isMultiArmCollision(waypoint, model_, data_plan_, joint_id_, body_to_arm_, 0.2);
         if (collisions.size() > 0)
         {
             auto [arm1, arm2] = collisions[0];
@@ -198,7 +159,6 @@ bool CBSPlanner::findFirstConflict(const MultiAgentPaths &paths, Conflict &out_c
             out_conflict.is_edge_conflict = false;
             return true;
         }
-        // }
     }
     return false;
 }

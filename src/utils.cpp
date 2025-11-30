@@ -224,7 +224,7 @@ vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim)
 // This uses mujocos forward kinematics to compute collisions. If too slow, we can look into
 // writing our own collision checker
 // Returns->vector of collision pairs, with id's of arms in collision
-vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm)
+vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol)
 {
     int num_actuators = joint_pos.size();
     int dof = joint_pos[0].size();
@@ -244,7 +244,7 @@ vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_p
     for (int i = 0; i < data->ncon; ++i)
     {
         const mjContact &c = data->contact[i];
-        if (c.dist >= 0.0)
+        if (c.dist > tol)
             continue;
 
         int b1 = model->geom_bodyid[c.geom1];
@@ -272,9 +272,9 @@ vector<vector<int>> buildBodyChildren(const mjModel *model)
     return children;
 }
 
-vector<pair<int, int>> isMulitArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm)
+vector<pair<int, int>> isMulitArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol)
 {
-    return isMultiArmCollision(node->q, model, data, joint_id, body_to_arm);
+    return isMultiArmCollision(node->q, model, data, joint_id, body_to_arm, tol);
 }
 
 vector<int> bodyToArm(
