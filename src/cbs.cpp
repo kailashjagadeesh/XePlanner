@@ -25,7 +25,6 @@ static double heuristicL1(const JointConfig &q, const JointConfig &goal)
     return h;
 }
 
-// FIXED: Added epsilon for float comparison
 static bool violatesVertexConstraints(int agent_id,
                                       const JointConfig &q,
                                       int t,
@@ -35,6 +34,7 @@ static bool violatesVertexConstraints(int agent_id,
 
     for (const auto &c : constraints)
     {
+        // Skip if its for a different agent, different time step or not a vertex constraint
         if (c.agent_id != agent_id)
             continue;
         if (c.type != ConstraintType::VERTEX)
