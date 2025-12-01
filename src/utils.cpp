@@ -83,23 +83,49 @@ void setArmsStartPose(mjModel *model, mjData *data, const vector<double> &start_
     }
 }
 
-bool hasCollision(const mjModel *model, const mjData *data, bool print_collisions)
+bool hasCollision(const mjModel *model, const mjData *data, bool print_collisions, int active_agent_id)
 {
+    // Hardcoded num_agents for geom parsing
+    int num_agents = 4;
+
+    // --- CHANGE 1: Safety Margin ---
+    // If we are planning (active_agent_id != -1), add a 2cm buffer to prevent "grazing".
+    // If running the final simulation (active_agent_id == -1), check for strict touching (0.0).
+    double safety_margin = (active_agent_id != -1) ? 0.02 : 0.0;
+
     for (int i = 0; i < data->ncon; ++i)
     {
         const mjContact &c = data->contact[i];
-        if (c.dist < 0.0)
+
+        // --- CHANGE 2: Check against margin instead of strict 0.0 ---
+        if (c.dist < safety_margin)
         {
+            if (active_agent_id != -1)
+            {
+                int a1 = geomToAgent(model, c.geom1, num_agents);
+                int a2 = geomToAgent(model, c.geom2, num_agents);
+
+                bool involves_active = (a1 == active_agent_id || a2 == active_agent_id);
+
+                // --- CHANGE 3: Logic Update ---
+                // If the collision involves two OTHER agents (e.g. Agent 2 hitting Agent 3),
+                // and we are currently planning for Agent 1, we ignore it.
+                // However, if it involves Agent 1 vs Agent 2, we MUST return true
+                // so RRT knows to avoid Agent 2.
+
+                if (a1 != -1 && a2 != -1 && !involves_active)
+                {
+                    continue;
+                }
+            }
+
             if (print_collisions)
             {
-                // const char *g1 = mj_id2name(model, mjOBJ_GEOM, c.geom1);
-                // const char *g2 = mj_id2name(model, mjOBJ_GEOM, c.geom2);
-                int body1_id = model->geom_bodyid[c.geom1];
-                int body2_id = model->geom_bodyid[c.geom2];
+                const char *g1 = mj_id2name(model, mjOBJ_GEOM, c.geom1);
+                const char *g2 = mj_id2name(model, mjOBJ_GEOM, c.geom2);
 
-                const char* b1 = mj_id2name(model, mjOBJ_BODY, body1_id);
-                const char* b2 = mj_id2name(model, mjOBJ_BODY, body2_id);
-                printf("Collision: %s vs %s (penetration %.5f)\n", b1 ? b1 : "body1", b2 ? b2 : "body2", c.dist);
+                printf("Collision: %s vs %s (dist %.5f < margin %.3f)\n",
+                       g1 ? g1 : "geom1", g2 ? g2 : "geom2", c.dist, safety_margin);
             }
             return true;
         }
@@ -198,26 +224,28 @@ vector<Node *> densifyPlan(const vector<Node *> &waypoints, double dt_sim)
 // This uses mujocos forward kinematics to compute collisions. If too slow, we can look into
 // writing our own collision checker
 // Returns->vector of collision pairs, with id's of arms in collision
-vector<pair<int,int>> isMultiArmCollision(const vector<vector<double>>& joint_pos, mjModel* model, mjData* data, const vector<vector<int>>& joint_id, const vector<int>& body_to_arm)
+vector<pair<int, int>> isMultiArmCollision(const vector<vector<double>> &joint_pos, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol)
 {
     int num_actuators = joint_pos.size();
     int dof = joint_pos[0].size();
-
     // Set joint positions into qpos using jnt_qposadr
-    for (int arm = 0; arm < num_actuators; ++arm) {
-        for (int j = 0; j < dof; ++j) {
-            int jid  = joint_id[arm][j];
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        for (int j = 0; j < dof; ++j)
+        {
+            int jid = joint_id[arm][j];
             int qadr = model->jnt_qposadr[jid];
             data->qpos[qadr] = joint_pos[arm][j];
         }
     }
+    mj_fwdPosition(model, data);
 
-    mj_fwdPosition(model, data); 
-
-    vector<pair<int,int>> collisions;
-    for (int i = 0; i < data->ncon; ++i) {
+    vector<pair<int, int>> collisions;
+    for (int i = 0; i < data->ncon; ++i)
+    {
         const mjContact &c = data->contact[i];
-        if (c.dist >= 0.0) continue;
+        if (c.dist > tol)
+            continue;
 
         int b1 = model->geom_bodyid[c.geom1];
         int b2 = model->geom_bodyid[c.geom2];
@@ -229,15 +257,14 @@ vector<pair<int,int>> isMultiArmCollision(const vector<vector<double>>& joint_po
             collisions.emplace_back(arm1, arm2);
         }
     }
-
     return collisions;
 }
 
-
-vector<vector<int>> buildBodyChildren(const mjModel* model)
+vector<vector<int>> buildBodyChildren(const mjModel *model)
 {
     vector<vector<int>> children(model->nbody);
-    for (int b = 1; b < model->nbody; b++) {
+    for (int b = 1; b < model->nbody; b++)
+    {
         int p = model->body_parentid[b];
         if (p >= 0)
             children[p].push_back(b);
@@ -245,14 +272,14 @@ vector<vector<int>> buildBodyChildren(const mjModel* model)
     return children;
 }
 
-vector<pair<int, int>> isMulitArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm)
+vector<pair<int, int>> isMulitArmCollision(const Node *node, mjModel *model, mjData *data, const vector<vector<int>> &joint_id, const vector<int> &body_to_arm, double tol)
 {
-    return isMultiArmCollision(node->q, model, data, joint_id, body_to_arm);
+    return isMultiArmCollision(node->q, model, data, joint_id, body_to_arm, tol);
 }
 
 vector<int> bodyToArm(
-    const vector<vector<int>>& act_id,
-    const mjModel* model,
+    const vector<vector<int>> &act_id,
+    const mjModel *model,
     int num_actuators,
     int dof)
 {
@@ -261,25 +288,31 @@ vector<int> bodyToArm(
     auto children = buildBodyChildren(model);
 
     vector<int> root_bodies(num_actuators, -1);
-    for (int arm = 0; arm < num_actuators; arm++) {
-        int first_act = act_id[arm][0];             
-        int joint = model->actuator_trnid[2*first_act];
+    for (int arm = 0; arm < num_actuators; arm++)
+    {
+        int first_act = act_id[arm][0];
+        int joint = model->actuator_trnid[2 * first_act];
         int body = model->jnt_bodyid[joint];
         root_bodies[arm] = body;
     }
 
     // BFS to assign all bodies in arm subtree
-    for (int arm = 0; arm < num_actuators; arm++) {
+    for (int arm = 0; arm < num_actuators; arm++)
+    {
         int root = root_bodies[arm];
-        if (root < 0) continue;
+        if (root < 0)
+            continue;
 
         vector<int> queue = {root};
         body_to_arm[root] = arm;
 
-        for (size_t i = 0; i < queue.size(); ++i) {
+        for (size_t i = 0; i < queue.size(); ++i)
+        {
             int parent = queue[i];
-            for (int child : children[parent]) {
-                if (body_to_arm[child] == -1) {
+            for (int child : children[parent])
+            {
+                if (body_to_arm[child] == -1)
+                {
                     body_to_arm[child] = arm;
                     queue.push_back(child);
                 }
@@ -295,17 +328,20 @@ bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjDat
     int dof = static_cast<int>(joint_pos.size());
 
     int world_body_id = 0;
-    for (int j = 0; j < dof; ++j) {
-        int jid  = joint_id[arm][j]; 
+    for (int j = 0; j < dof; ++j)
+    {
+        int jid = joint_id[arm][j];
         int qadr = model->jnt_qposadr[jid];
         data->qpos[qadr] = joint_pos[j];
     }
 
     mj_fwdPosition(model, data);
 
-    for (int i = 0; i < data->ncon; ++i) {
+    for (int i = 0; i < data->ncon; ++i)
+    {
         const mjContact &c = data->contact[i];
-        if (c.dist >= 0.0) continue; 
+        if (c.dist >= 0.0)
+            continue;
 
         int b1 = model->geom_bodyid[c.geom1];
         int b2 = model->geom_bodyid[c.geom2];
@@ -321,4 +357,120 @@ bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjDat
             return true;
     }
     return false;
+}
+
+void setAllArmsQpos(const mjModel *model, mjData *data, const std::vector<std::vector<double>> &q_multi)
+{
+    int num_actuators = static_cast<int>(q_multi.size());
+
+    for (int arm = 0; arm < num_actuators; ++arm)
+    {
+        const auto &q_arm = q_multi[arm];
+        int dof = static_cast<int>(q_arm.size());
+
+        for (int j = 0; j < dof; ++j)
+        {
+            char joint_name[64];
+            // assumes joint naming: panda1_joint1, panda1_joint2, ..., panda4_joint7
+            std::snprintf(joint_name, sizeof(joint_name),
+                          "panda%d_joint%d", arm + 1, j + 1);
+
+            int j_id = mj_name2id(model, mjOBJ_JOINT, joint_name);
+            if (j_id < 0)
+            {
+                // If a joint is missing, you can choose to warn or skip.
+                // For now we just skip silently.
+                continue;
+            }
+
+            int qpos_adr = model->jnt_qposadr[j_id];
+            data->qpos[qpos_adr] = q_arm[j];
+        }
+    }
+}
+
+// Check if a multi-arm configuration is collision-free
+bool isStateValid(const mjModel *model, mjData *data, const std::vector<std::vector<double>> &q_multi, bool print_collisions, int active_agent_id)
+{
+    setAllArmsQpos(model, data, q_multi);
+    mju_zero(data->qvel, model->nv);
+    mju_zero(data->qacc, model->nv);
+    mju_zero(data->ctrl, model->nu);
+    mj_forward(model, data);
+
+    return !hasCollision(model, data, print_collisions, active_agent_id);
+}
+
+// Check if the entire motion from q_from to q_to is collision-free
+bool isEdgeValid(const mjModel *model,
+                 mjData *data,
+                 const std::vector<std::vector<double>> &q_from,
+                 const std::vector<std::vector<double>> &q_to,
+                 int num_substeps,
+                 bool print_collisions)
+{
+    if (q_from.size() != q_to.size())
+        return false;
+
+    int num_arms = static_cast<int>(q_from.size());
+    for (int arm = 0; arm < num_arms; ++arm)
+    {
+        if (q_from[arm].size() != q_to[arm].size())
+            return false;
+    }
+
+    for (int k = 0; k <= num_substeps; ++k)
+    {
+        double alpha = static_cast<double>(k) / static_cast<double>(num_substeps);
+
+        std::vector<std::vector<double>> q_interp(num_arms);
+        for (int arm = 0; arm < num_arms; ++arm)
+        {
+            int dof = static_cast<int>(q_from[arm].size());
+            q_interp[arm].resize(dof);
+
+            for (int j = 0; j < dof; ++j)
+            {
+                double q0 = q_from[arm][j];
+                double q1 = q_to[arm][j];
+                q_interp[arm][j] = (1.0 - alpha) * q0 + alpha * q1;
+            }
+        }
+
+        if (!isStateValid(model, data, q_interp, print_collisions && (k == 0)))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+int geomToAgent(const mjModel *model, int geom_id, int num_agents)
+{
+    if (geom_id < 0)
+        return -1;
+
+    int body_id = model->geom_bodyid[geom_id];
+
+    while (body_id > 0)
+    {
+        const char *name = mj_id2name(model, mjOBJ_BODY, body_id);
+
+        if (name && strncmp(name, "panda", 5) == 0)
+        {
+            const char *p = name + 5; // Skip "panda"
+            char *endptr = nullptr;
+            long idx = strtol(p, &endptr, 10);
+
+            if (endptr != p)
+            {
+                return int(idx - 1);
+            }
+        }
+
+        body_id = model->body_parentid[body_id];
+    }
+
+    return -1;
 }
