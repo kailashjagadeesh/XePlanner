@@ -127,28 +127,7 @@ int main()
         mju_error("Could not initialize GLFW");
     }
 
-    // create window, make OpenGL context current, request v-sync
-    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetCursorPosCallback(window, mouse_move_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-
-    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
-
-    // initialize visualization data structures
-    mjv_defaultCamera(&cam);
-    configureCameraForModel(m, &cam);
-    mjv_defaultOption(&opt);
-    mjv_defaultScene(&scn);
-    mjr_defaultContext(&con);
-
-    // create scene and context
-    mjv_makeScene(m, &scn, 2000);
-    mjr_makeContext(m, &con, mjFONTSCALE_150);
-
-    // ----------------- CONFIGURATION SETUP ----------------- //
+        // ----------------- CONFIGURATION SETUP ----------------- //
 
     const int num_agents = 4;
     const int dofs = static_cast<int>(START_POSE.size());
@@ -273,6 +252,27 @@ int main()
     //     glfwSwapBuffers(window);
     //     glfwPollEvents();
     // }
+    
+    // create window, make OpenGL context current, request v-sync
+    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, mouse_move_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+
+    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
+
+    // initialize visualization data structures
+    mjv_defaultCamera(&cam);
+    configureCameraForModel(m, &cam);
+    mjv_defaultOption(&opt);
+    mjv_defaultScene(&scn);
+    mjr_defaultContext(&con);
+
+    // create scene and context
+    mjv_makeScene(m, &scn, 2000);
+    mjr_makeContext(m, &con, mjFONTSCALE_150);
 
     setAllArmsQpos(m, d, start_poses);
     mj_forward(m, d);

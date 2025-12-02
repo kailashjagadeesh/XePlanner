@@ -118,26 +118,7 @@ int main()
         mju_error("Could not initialize GLFW");
     }
 
-    // create window, make OpenGL context current, request v-sync
-    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetCursorPosCallback(window, mouse_move_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-
-    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
-
-    // initialize visualization data structures
-    mjv_defaultCamera(&cam);
-    configureCameraForModel(m, &cam);
-    mjv_defaultOption(&opt);
-    mjv_defaultScene(&scn);
-    mjr_defaultContext(&con);
-
-    // create scene and context
-    mjv_makeScene(m, &scn, 2000);
-    mjr_makeContext(m, &con, mjFONTSCALE_150);
+    
 
     vector<double> end_pose = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
@@ -177,45 +158,29 @@ int main()
             act_id[arm][j] = id;
         }
     }
-<<<<<<< HEAD:src/main.cpp
-    vector<vector<int>> joint_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm) {
-        for (int j = 0; j < dof; ++j) {
-            char name[64];
-            snprintf(name, sizeof(name), "panda%d_joint%d", arm+1, j+1);
-            int jid = mj_name2id(m, mjOBJ_JOINT, name);
-            if (jid < 0) throw runtime_error("Could not find joint");
-            joint_id[arm][j] = jid;
-        }
-    }
-    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
-
-    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
-    // INPUT: vector<Node*> -> dim(num_waypoints)
-    vector<double> end_pose  = {0.5, 0, 0.0, -1.2, 0.5, 1.0, -1};
-    vector<vector<double>> start_poses(num_actuators, start_pose);
-    vector<vector<double>> end_poses(num_actuators, end_pose);
-    Node* start = new Node(start_poses, 0);
-    Node* mid = new Node(end_poses, 1);
-    Node* mid_pause = new Node(end_poses, 2);
-    Node* end = new Node(start_poses, 3);
-    vector<Node*> plan = {start, mid, mid_pause, end};
-    // --------------------------------------------------------------------------------------- //
-
-
-    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
-
-    // set initial arm pose and gripper state
-    setArmsStartPose(m, d, start_pose);
-    setArmActuatorTargets(m, d, start_pose);
-    setGrippersOpen(m, d);
-    mj_forward(m, d);
-
-=======
     
     auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
->>>>>>> kj_ecbs_dev:src/main_rrt.cpp
 
+    // create window, make OpenGL context current, request v-sync
+    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, mouse_move_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+
+    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
+
+    // initialize visualization data structures
+    mjv_defaultCamera(&cam);
+    configureCameraForModel(m, &cam);
+    mjv_defaultOption(&opt);
+    mjv_defaultScene(&scn);
+    mjr_defaultContext(&con);
+
+    // create scene and context
+    mjv_makeScene(m, &scn, 2000);
+    mjr_makeContext(m, &con, mjFONTSCALE_150);
     while (!glfwWindowShouldClose(window))
     {
         mj_step1(m, d);
