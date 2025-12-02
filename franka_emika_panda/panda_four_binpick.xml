@@ -1,0 +1,272 @@
+<mujoco model="panda_four_binpick">
+  <compiler angle="radian" meshdir="assets/"/>
+  <option timestep="0.002"/>
+
+  <asset>
+    <!-- Visual Materials -->
+    <material name="PastelGray" rgba="0.7 0.7 0.7 0.2"/>
+    <material name="box1_mat" rgba="0 0 1 1"/>
+    <material name="box2_mat" rgba="0 1 0 1"/>
+    <material name="box3_mat" rgba="1 0 0 1"/>
+    <material name="box4_mat" rgba="1 1 0 1"/>
+    <material name="box5_mat" rgba="0.5 0 0.5 1"/>
+    <material name="rod_mat" rgba="0.5 0.5 0.5 1"/>
+    
+    <!-- Robot Meshes (Assumed standard Panda names) -->
+    <mesh name="link0" file="link0.stl"/>
+    <mesh name="link1" file="link1.stl"/>
+    <mesh name="link2" file="link2.stl"/>
+    <mesh name="link3" file="link3.stl"/>
+    <mesh name="link4" file="link4.stl"/>
+    <mesh name="link5" file="link5.stl"/>
+    <mesh name="link6" file="link6.stl"/>
+    <mesh name="link7" file="link7.stl"/>
+    <mesh name="hand" file="hand.stl"/>
+    <mesh name="finger" file="finger.stl"/>
+  </asset>
+
+  <default>
+    <default class="panda">
+      <joint damping="1" stiffness="0"/>
+      <geom type="mesh" rgba="1 1 1 1"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <!-- Base Table -->
+    <body name="base" pos="0 0 0">
+      <geom type="box" size="1 1 0.05" pos="0 0 0.05" material="PastelGray"/>
+      
+      <!-- Box 1 (Blue) -->
+      <body name="box1" pos="0 0 0">
+        <geom name="b1_bottom" type="box" size="0.25 0.25 0.01" material="box1_mat"/>
+        <geom name="b1_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" material="box1_mat"/>
+        <geom name="b1_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" material="box1_mat"/>
+        <geom name="b1_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" material="box1_mat"/>
+        <geom name="b1_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" material="box1_mat"/>
+      </body>
+
+      <!-- Box 2 (Green) -->
+      <body name="box2" pos="0.5 0 0">
+        <geom name="b2_bottom" type="box" size="0.25 0.25 0.01" material="box2_mat"/>
+        <geom name="b2_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" material="box2_mat"/>
+        <geom name="b2_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" material="box2_mat"/>
+        <geom name="b2_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" material="box2_mat"/>
+        <geom name="b2_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" material="box2_mat"/>
+      </body>
+
+      <!-- Box 3 (Red) -->
+      <body name="box3" pos="-0.5 0 0">
+        <geom name="b3_bottom" type="box" size="0.25 0.25 0.01" material="box3_mat"/>
+        <geom name="b3_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" material="box3_mat"/>
+        <geom name="b3_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" material="box3_mat"/>
+        <geom name="b3_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" material="box3_mat"/>
+        <geom name="b3_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" material="box3_mat"/>
+      </body>
+
+      <!-- Box 4 (Yellow) -->
+      <body name="box4" pos="0 0.5 0">
+        <geom name="b4_bottom" type="box" size="0.25 0.25 0.01" material="box4_mat"/>
+        <geom name="b4_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" material="box4_mat"/>
+        <geom name="b4_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" material="box4_mat"/>
+        <geom name="b4_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" material="box4_mat"/>
+        <geom name="b4_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" material="box4_mat"/>
+      </body>
+
+      <!-- Box 5 (Purple) -->
+      <body name="box5" pos="0 -0.5 0">
+        <geom name="b5_bottom" type="box" size="0.25 0.25 0.01" material="box5_mat"/>
+        <geom name="b5_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" material="box5_mat"/>
+        <geom name="b5_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" material="box5_mat"/>
+        <geom name="b5_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" material="box5_mat"/>
+        <geom name="b5_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" material="box5_mat"/>
+      </body>
+    </body>
+
+    <!-- Panda 0 -->
+    <body name="panda0_link0" pos="0.4 -0.4 0.1" euler="0 0 2.28" childclass="panda">
+      <geom mesh="link0"/>
+      <body name="panda0_link1" pos="0 0 0.333">
+        <joint name="panda0_joint1" axis="0 0 1" range="-2.9671 2.9671"/>
+        <geom mesh="link1"/>
+        <body name="panda0_link2" pos="0 0 0" euler="-1.5708 0 0">
+          <joint name="panda0_joint2" axis="0 0 1" range="-1.8326 1.8326"/>
+          <geom mesh="link2"/>
+          <body name="panda0_link3" pos="0 -0.316 0" euler="1.5708 0 0">
+            <joint name="panda0_joint3" axis="0 0 1" range="-2.9671 2.9671"/>
+            <geom mesh="link3"/>
+            <body name="panda0_link4" pos="0.0825 0 0" euler="1.5708 0 0">
+              <joint name="panda0_joint4" axis="0 0 1" range="-3.1416 0.0873"/>
+              <geom mesh="link4"/>
+              <body name="panda0_link5" pos="-0.0825 0.384 0" euler="-1.5708 0 0">
+                <joint name="panda0_joint5" axis="0 0 1" range="-2.9671 2.9671"/>
+                <geom mesh="link5"/>
+                <body name="panda0_link6" pos="0 0 0" euler="1.5708 0 0">
+                  <joint name="panda0_joint6" axis="0 0 1" range="-0.0873 3.8223"/>
+                  <geom mesh="link6"/>
+                  <body name="panda0_link7" pos="0.088 0 0" euler="1.5708 0 0">
+                    <joint name="panda0_joint7" axis="0 0 1" range="-2.9671 2.9671"/>
+                    <geom mesh="link7"/>
+                    <body name="panda0_hand" pos="0 0 0.107">
+                      <geom mesh="hand"/>
+                      <!-- Rod 0 -->
+                      <geom name="rod_0" type="cylinder" size="0.015 0.25" pos="0 0 0.1" euler="0 1.5708 0" material="rod_mat"/>
+                      <!-- Fingers -->
+                      <body name="panda0_leftfinger" pos="0 0 0.0584">
+                        <joint name="panda0_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>
+                        <geom mesh="finger"/>
+                      </body>
+                      <body name="panda0_rightfinger" pos="0 0 0.0584">
+                        <joint name="panda0_finger_joint2" type="slide" axis="0 -1 0" range="0 0.04"/>
+                        <geom mesh="finger" euler="0 0 3.14159"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Panda 1 -->
+    <body name="panda1_link0" pos="-0.4 -0.4 0.1" euler="0 0 0.66" childclass="panda">
+      <geom mesh="link0"/>
+      <body name="panda1_link1" pos="0 0 0.333">
+        <joint name="panda1_joint1" axis="0 0 1" range="-2.9671 2.9671"/>
+        <geom mesh="link1"/>
+        <body name="panda1_link2" pos="0 0 0" euler="-1.5708 0 0">
+          <joint name="panda1_joint2" axis="0 0 1" range="-1.8326 1.8326"/>
+          <geom mesh="link2"/>
+          <body name="panda1_link3" pos="0 -0.316 0" euler="1.5708 0 0">
+            <joint name="panda1_joint3" axis="0 0 1" range="-2.9671 2.9671"/>
+            <geom mesh="link3"/>
+            <body name="panda1_link4" pos="0.0825 0 0" euler="1.5708 0 0">
+              <joint name="panda1_joint4" axis="0 0 1" range="-3.1416 0.0873"/>
+              <geom mesh="link4"/>
+              <body name="panda1_link5" pos="-0.0825 0.384 0" euler="-1.5708 0 0">
+                <joint name="panda1_joint5" axis="0 0 1" range="-2.9671 2.9671"/>
+                <geom mesh="link5"/>
+                <body name="panda1_link6" pos="0 0 0" euler="1.5708 0 0">
+                  <joint name="panda1_joint6" axis="0 0 1" range="-0.0873 3.8223"/>
+                  <geom mesh="link6"/>
+                  <body name="panda1_link7" pos="0.088 0 0" euler="1.5708 0 0">
+                    <joint name="panda1_joint7" axis="0 0 1" range="-2.9671 2.9671"/>
+                    <geom mesh="link7"/>
+                    <body name="panda1_hand" pos="0 0 0.107">
+                      <geom mesh="hand"/>
+                      <!-- Rod 1 -->
+                      <geom name="rod_1" type="cylinder" size="0.015 0.25" pos="0 0 0.1" euler="0 1.5708 0" material="rod_mat"/>
+                      <body name="panda1_leftfinger" pos="0 0 0.0584">
+                        <joint name="panda1_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>
+                        <geom mesh="finger"/>
+                      </body>
+                      <body name="panda1_rightfinger" pos="0 0 0.0584">
+                        <joint name="panda1_finger_joint2" type="slide" axis="0 -1 0" range="0 0.04"/>
+                        <geom mesh="finger" euler="0 0 3.14159"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Panda 2 -->
+    <body name="panda2_link0" pos="-0.4 0.4 0.1" euler="0 0 -0.66" childclass="panda">
+      <geom mesh="link0"/>
+      <body name="panda2_link1" pos="0 0 0.333">
+        <joint name="panda2_joint1" axis="0 0 1" range="-2.9671 2.9671"/>
+        <geom mesh="link1"/>
+        <body name="panda2_link2" pos="0 0 0" euler="-1.5708 0 0">
+          <joint name="panda2_joint2" axis="0 0 1" range="-1.8326 1.8326"/>
+          <geom mesh="link2"/>
+          <body name="panda2_link3" pos="0 -0.316 0" euler="1.5708 0 0">
+            <joint name="panda2_joint3" axis="0 0 1" range="-2.9671 2.9671"/>
+            <geom mesh="link3"/>
+            <body name="panda2_link4" pos="0.0825 0 0" euler="1.5708 0 0">
+              <joint name="panda2_joint4" axis="0 0 1" range="-3.1416 0.0873"/>
+              <geom mesh="link4"/>
+              <body name="panda2_link5" pos="-0.0825 0.384 0" euler="-1.5708 0 0">
+                <joint name="panda2_joint5" axis="0 0 1" range="-2.9671 2.9671"/>
+                <geom mesh="link5"/>
+                <body name="panda2_link6" pos="0 0 0" euler="1.5708 0 0">
+                  <joint name="panda2_joint6" axis="0 0 1" range="-0.0873 3.8223"/>
+                  <geom mesh="link6"/>
+                  <body name="panda2_link7" pos="0.088 0 0" euler="1.5708 0 0">
+                    <joint name="panda2_joint7" axis="0 0 1" range="-2.9671 2.9671"/>
+                    <geom mesh="link7"/>
+                    <body name="panda2_hand" pos="0 0 0.107">
+                      <geom mesh="hand"/>
+                      <!-- Rod 2 (Fixed parent from panda0 to panda2) -->
+                      <geom name="rod_2" type="cylinder" size="0.015 0.25" pos="0 0 0.1" euler="0 1.5708 0" material="rod_mat"/>
+                      <body name="panda2_leftfinger" pos="0 0 0.0584">
+                        <joint name="panda2_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>
+                        <geom mesh="finger"/>
+                      </body>
+                      <body name="panda2_rightfinger" pos="0 0 0.0584">
+                        <joint name="panda2_finger_joint2" type="slide" axis="0 -1 0" range="0 0.04"/>
+                        <geom mesh="finger" euler="0 0 3.14159"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Panda 3 -->
+    <body name="panda3_link0" pos="0.4 0.4 0.1" euler="0 0 -2.28" childclass="panda">
+      <geom mesh="link0"/>
+      <body name="panda3_link1" pos="0 0 0.333">
+        <joint name="panda3_joint1" axis="0 0 1" range="-2.9671 2.9671"/>
+        <geom mesh="link1"/>
+        <body name="panda3_link2" pos="0 0 0" euler="-1.5708 0 0">
+          <joint name="panda3_joint2" axis="0 0 1" range="-1.8326 1.8326"/>
+          <geom mesh="link2"/>
+          <body name="panda3_link3" pos="0 -0.316 0" euler="1.5708 0 0">
+            <joint name="panda3_joint3" axis="0 0 1" range="-2.9671 2.9671"/>
+            <geom mesh="link3"/>
+            <body name="panda3_link4" pos="0.0825 0 0" euler="1.5708 0 0">
+              <joint name="panda3_joint4" axis="0 0 1" range="-3.1416 0.0873"/>
+              <geom mesh="link4"/>
+              <body name="panda3_link5" pos="-0.0825 0.384 0" euler="-1.5708 0 0">
+                <joint name="panda3_joint5" axis="0 0 1" range="-2.9671 2.9671"/>
+                <geom mesh="link5"/>
+                <body name="panda3_link6" pos="0 0 0" euler="1.5708 0 0">
+                  <joint name="panda3_joint6" axis="0 0 1" range="-0.0873 3.8223"/>
+                  <geom mesh="link6"/>
+                  <body name="panda3_link7" pos="0.088 0 0" euler="1.5708 0 0">
+                    <joint name="panda3_joint7" axis="0 0 1" range="-2.9671 2.9671"/>
+                    <geom mesh="link7"/>
+                    <body name="panda3_hand" pos="0 0 0.107">
+                      <geom mesh="hand"/>
+                      <!-- Rod 3 (Fixed parent from panda0 to panda3) -->
+                      <geom name="rod_3" type="cylinder" size="0.015 0.25" pos="0 0 0.1" euler="0 1.5708 0" material="rod_mat"/>
+                      <body name="panda3_leftfinger" pos="0 0 0.0584">
+                        <joint name="panda3_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>
+                        <geom mesh="finger"/>
+                      </body>
+                      <body name="panda3_rightfinger" pos="0 0 0.0584">
+                        <joint name="panda3_finger_joint2" type="slide" axis="0 -1 0" range="0 0.04"/>
+                        <geom mesh="finger" euler="0 0 3.14159"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+  </worldbody>
+</mujoco>
