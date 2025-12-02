@@ -45,6 +45,7 @@ struct CTNode
     std::vector<Constraint> constraints; // N.C
     MultiAgentPaths paths;               // N.pi
     double cost = 0.0;
+    int num_conflicts = 0; 
 
     int depth = 0;
 };

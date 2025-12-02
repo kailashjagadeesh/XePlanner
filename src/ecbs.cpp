@@ -235,6 +235,11 @@ void ECBSPlanner::expandNode(const std::shared_ptr<CTNode> &node,
         child->paths[agent_to_constrain] = std::move(new_path);
         child->cost = computeTotalCost(child->paths);
         child->depth = node->depth + 1;
+        // Update number of conflicts
+        //fixing bug for the focal search
+        std::vector<Conflict> all_conflicts;
+        findAllConflicts(child->paths, all_conflicts);
+        child->num_conflicts = all_conflicts.size();
 
         return child;
     };
@@ -482,13 +487,13 @@ std::vector<Node *> ECBSPlanner::plan(const std::vector<std::vector<double>> &st
         
         for (auto node : focal)
         {
-            std::vector<Conflict> conflicts;
-            findAllConflicts(node->paths, conflicts);
-            int num_conflicts = conflicts.size();
+            // std::vector<Conflict> conflicts;
+            // findAllConflicts(node->paths, conflicts);
+            // int num_conflicts = conflicts.size();
             
-            if (num_conflicts < min_conflicts)
+            if (node->num_conflicts < min_conflicts)
             {
-                min_conflicts = num_conflicts;
+                min_conflicts = node->num_conflicts;
                 best_focal_node = node;
             }
         }
