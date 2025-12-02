@@ -18,6 +18,11 @@ To run the planners, build the workspace and run
 ``` ./ECBSPlanner ``` for ECBS planner
 ``` ./RRTPlanner ``` for RRT-Connect planner
 
+Random start/goal generator (collision-checked):
+- Build target: `cmake -S . -B build && cmake --build build --target RandomConfigGenerator`
+- Run from `build/`: `./RandomConfigGenerator [num_pairs] [output_path] [seed]`
+- Output: JSON with four 7-DOF joint arrays under `"start"` and `"goal"` for each sample (default `random_configs.json` in the run directory).
+
 2 new configs added:
 - multi_panda_criss_cross.xml
 - panda_four_bins.xml

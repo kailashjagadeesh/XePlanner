@@ -1,5 +1,5 @@
 <mujoco model="panda scene">
-  <include file="panda_four_bins.xml"/>
+  <include file="multi_panda_criss_cross.xml"/>
 
   <statistic center="0.3 0 0.4" extent="1"/>
 

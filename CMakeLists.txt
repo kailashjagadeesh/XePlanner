@@ -35,8 +35,14 @@ add_executable(RRTPlanner
     src/utils.cpp
 )
 
+add_executable(RandomConfigGenerator
+    src/generate_random_configs.cpp
+    src/utils.cpp
+)
+
 # Dynamic link
 target_link_libraries(ECBSPlanner ${MUJOCO_LIBRARY} glfw)
 target_link_libraries(CBSPlanner ${MUJOCO_LIBRARY} glfw)
 
 target_link_libraries(RRTPlanner ${MUJOCO_LIBRARY} glfw)
+target_link_libraries(RandomConfigGenerator ${MUJOCO_LIBRARY})
