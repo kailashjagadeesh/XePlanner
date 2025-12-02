@@ -28,6 +28,11 @@ static bool last_collision = false;
 
 // --- POSE DEFINITIONS ---
 static const vector<double> START_POSE = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> START_POSE_1 = {0.1027, -0.1220, 0.0921, -2.6578, 0.0561, 3.7525, -2.2000};
+// static const vector<double> START_POSE_2 = {0.1036, -0.3459, 0.0791, -2.6962, 0.0298, 3.7525, -2.2000};
+static const vector<double> START_POSE_2 = {0.0883, -0.3013, 0.0831, -2.7388, 0.0038, 3.7525, -2.2000};
+static const vector<double> START_POSE_3 = {0.1159, -0.4048, 0.0825, -2.4625, 0.0944, 3.5935, -2.2000};
+static const vector<double> START_POSE_4 = {0.1087, -0.4469, 0.0634, -2.0677, 0.1147, 3.1900, -2.2000};
 static const vector<double> END_POSE = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
 static const vector<double> HOME_POSE = {0.0, -0.785, 0.0, -2.356, 0.0, 1.57, 0.785};
 static const vector<double> UPRIGHT_POSE = {0.0, 0.0, 0.0, -1.0, 0.0, 2.0, 0.8};
@@ -152,19 +157,19 @@ int main()
     std::vector<std::vector<double>> goal_poses(num_agents);
 
     // Agent 1: Start -> End
-    start_poses[0] = START_POSE;
-    goal_poses[0] = END_POSE;
+    start_poses[0] = START_POSE_1;
+    goal_poses[0] = HOME_POSE;
 
     // Agent 2: End -> Start (Swap with Agent 1)
-    start_poses[1] = END_POSE;
-    goal_poses[1] = START_POSE;
+    start_poses[1] = START_POSE_2;
+    goal_poses[1] = HOME_POSE;
 
     // Agent 3: Home -> Upright
-    start_poses[2] = HOME_POSE;
-    goal_poses[2] = UPRIGHT_POSE;
+    start_poses[2] = START_POSE_3;
+    goal_poses[2] = HOME_POSE;
 
     // Agent 4: Upright -> Home (Swap with Agent 3)
-    start_poses[3] = UPRIGHT_POSE;
+    start_poses[3] = START_POSE_4;
     goal_poses[3] = HOME_POSE;
 
     // Apply initial start poses to the simulation so visualizer starts correctly
