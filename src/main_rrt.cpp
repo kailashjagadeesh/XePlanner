@@ -139,7 +139,7 @@ int main()
         static_cast<int>(start_pose.size()),
         start,
         goal,
-        20000, //max_iters
+        50000, //max_iters
         0.6);//step_size
     auto t_end_plan = std::chrono::high_resolution_clock::now();
     printf("Planning done. Sparse waypoints: %zu\n", plan.size());

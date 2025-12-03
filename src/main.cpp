@@ -545,7 +545,7 @@ int main(int argc, char **argv)
             dof,
             start,
             goal,
-            20000, // max_iters
+            100000, // max_iters
             0.6);  // step_size
         auto t_end_plan = std::chrono::high_resolution_clock::now();
         double plan_seconds = std::chrono::duration<double>(t_end_plan - t_start_plan).count();

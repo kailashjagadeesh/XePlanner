@@ -3,6 +3,7 @@
 #include <vector>
 #include <mujoco/mujoco.h>
 #include "utils.h"
+#include <iostream>
 
 // Simple RRT-Connect planner that returns a sequence of joint-space waypoints.
 // It expects joint positions in Node::q shaped as q[arm][joint].

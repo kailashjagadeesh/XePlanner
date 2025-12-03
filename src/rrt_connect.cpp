@@ -77,7 +77,8 @@ static Node *connect(const Node *from, const Node *to, double step_size)
 static bool edgeCollisionFree(mjModel *model, mjData *data, const Node *a, const Node *b, double step_size, int agent_id)
 {
     double dist = distance(a->q, b->q);
-    int steps = std::max(1, static_cast<int>(std::ceil(dist / step_size)));
+    double interp_step_size = 0.1;
+    int steps = std::max(1, static_cast<int>(std::ceil(dist / interp_step_size)));
     for (int k = 0; k <= steps; ++k)
     {
         double alpha = static_cast<double>(k) / static_cast<double>(steps);
@@ -128,6 +129,7 @@ static ExtendStatus extend(TreeNode *&new_node, vector<TreeNode *> &tree, const 
         delete stepped;
         return Trapped;
     }
+    //std::cout << "generated collision free edge" << std::endl;
     new_node = new TreeNode{stepped, nearest_node};
     tree.push_back(new_node);
     if (distance(stepped->q, target->q) < 1e-3)
