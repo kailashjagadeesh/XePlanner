@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "xecbs.h"  // Include first to ensure CTNode has num_conflicts field
 #include "cbs.h"
 #include "ecbs.h"
-#include "xecbs.h"
 #include "rrt_connect.h"
 #include "utils.h"
 

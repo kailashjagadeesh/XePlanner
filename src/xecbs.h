@@ -10,6 +10,8 @@
 #include <string>
 #include <cmath>
 
+#ifndef PLANNER_SHARED_TYPES
+#define PLANNER_SHARED_TYPES
 enum class ConstraintType
 {
     VERTEX,
@@ -107,6 +109,7 @@ struct SingleArmNodeEqual
         return true;
     }
 };
+#endif // PLANNER_SHARED_TYPES
 
 // Experience entry for caching low-level plans
 struct ExperienceEntry
