@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include "utils.h"
 #include <stdexcept>
 #include <iostream>
@@ -27,7 +28,7 @@ static bool print_collisions = false;
 static bool last_collision = false;
 
 // --- POSE DEFINITIONS ---
-static const vector<double> START_POSE = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> START_POSE = {-1.0472, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
 static const vector<double> START_POSE_1 = {0.1027, -0.1220, 0.0921, -2.6578, 0.0561, 3.7525, -2.2000};
 // static const vector<double> START_POSE_2 = {0.1036, -0.3459, 0.0791, -2.6962, 0.0298, 3.7525, -2.2000};
 static const vector<double> START_POSE_2 = {0.0883, -0.3013, 0.0831, -2.7388, 0.0038, 3.7525, -2.2000};
@@ -136,19 +137,33 @@ int main()
     std::vector<std::vector<double>> goal_poses(num_agents);
 
     // Agent 1: Start -> End
-    start_poses[0] = START_POSE_1;
+    // start_poses[0] = START_POSE_1;
+    // goal_poses[0] = HOME_POSE;
+
+    // // Agent 2: End -> Start (Swap with Agent 1)
+    // start_poses[1] = START_POSE_2;
+    // goal_poses[1] = HOME_POSE;
+
+    // // Agent 3: Home -> Upright
+    // start_poses[2] = START_POSE_3;
+    // goal_poses[2] = HOME_POSE;
+
+    // // Agent 4: Upright -> Home (Swap with Agent 3)
+    // start_poses[3] = START_POSE_4;
+    // goal_poses[3] = HOME_POSE;
+    start_poses[0] = START_POSE;
     goal_poses[0] = HOME_POSE;
 
     // Agent 2: End -> Start (Swap with Agent 1)
-    start_poses[1] = START_POSE_2;
+    start_poses[1] = START_POSE;
     goal_poses[1] = HOME_POSE;
 
     // Agent 3: Home -> Upright
-    start_poses[2] = START_POSE_3;
+    start_poses[2] = START_POSE;
     goal_poses[2] = HOME_POSE;
 
     // Agent 4: Upright -> Home (Swap with Agent 3)
-    start_poses[3] = START_POSE_4;
+    start_poses[3] = START_POSE;
     goal_poses[3] = HOME_POSE;
 
     // Apply initial start poses to the simulation so visualizer starts correctly
@@ -208,7 +223,10 @@ int main()
         std::cerr << "Error: Start or Goal configurations are in collision!\n";
     }
 
+    auto t_start_plan = std::chrono::high_resolution_clock::now();
     std::vector<Node *> plan = planner.plan(start_poses, goal_poses);
+    auto t_end_plan = std::chrono::high_resolution_clock::now();
+    double plan_seconds = std::chrono::duration<double>(t_end_plan - t_start_plan).count();
 
     if (plan.empty())
     {
@@ -218,6 +236,7 @@ int main()
     else
     {
         std::cout << "[MAIN] CBS returned plan with " << plan.size() << " waypoints\n";
+        std::cout << "[MAIN] Planning time: " << plan_seconds << " s\n";
     }
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //

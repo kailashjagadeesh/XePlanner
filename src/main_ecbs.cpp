@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include "utils.h"
 #include <stdexcept>
 #include <iostream>
@@ -27,8 +28,9 @@ static bool print_collisions = false;
 static bool last_collision = false;
 
 // --- POSE DEFINITIONS ---
-static const vector<double> START_POSE = {0.0, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
+static const vector<double> START_POSE = {-1.0472, -0.2, 0.0, -2.2, 0.0, 2.0, -2.2};
 static const vector<double> END_POSE = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
+static const vector<double> END_POSE_1 = {0.0349, -0.7090, 0.0314, -2.2983, 0.0035, 1.8429, -2.2000};
 static const vector<double> HOME_POSE = {0.0, -0.785, 0.0, -2.356, 0.0, 1.57, 0.785};
 static const vector<double> UPRIGHT_POSE = {0.0, 0.0, 0.0, -1.0, 0.0, 2.0, 0.8};
 
@@ -134,19 +136,19 @@ int main()
 
     // Agent 1: Start -> End
     start_poses[0] = START_POSE;
-    goal_poses[0] = END_POSE;
+    goal_poses[0] = END_POSE_1;
 
     // Agent 2: End -> Start (Swap with Agent 1)
-    start_poses[1] = END_POSE;
-    goal_poses[1] = START_POSE;
+    start_poses[1] = START_POSE;
+    goal_poses[1] = END_POSE_1;
 
     // Agent 3: Home -> Upright
-    start_poses[2] = HOME_POSE;
-    goal_poses[2] = UPRIGHT_POSE;
+    start_poses[2] = START_POSE;
+    goal_poses[2] = END_POSE_1;
 
     // Agent 4: Upright -> Home (Swap with Agent 3)
-    start_poses[3] = UPRIGHT_POSE;
-    goal_poses[3] = HOME_POSE;
+    start_poses[3] = START_POSE;
+    goal_poses[3] = END_POSE_1;
 
     // Apply initial start poses to the simulation so visualizer starts correctly
     setAllArmsQpos(m, d, start_poses);
@@ -205,7 +207,10 @@ int main()
         std::cerr << "Error: Start or Goal configurations are in collision!\n";
     }
 
+    auto t_start_plan = std::chrono::high_resolution_clock::now();
     std::vector<Node *> plan = planner.plan(start_poses, goal_poses);
+    auto t_end_plan = std::chrono::high_resolution_clock::now();
+    double plan_seconds = std::chrono::duration<double>(t_end_plan - t_start_plan).count();
 
     if (plan.empty())
     {
@@ -215,6 +220,7 @@ int main()
     else
     {
         std::cout << "[MAIN] ECBS returned plan with " << plan.size() << " waypoints\n";
+        std::cout << "[MAIN] Planning time: " << plan_seconds << " s\n";
     }
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //

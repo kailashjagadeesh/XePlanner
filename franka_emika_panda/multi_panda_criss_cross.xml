@@ -128,7 +128,7 @@
 
     <!-- Arranged as two facing pairs with a zipper offset and a central work strip -->
     <!-- panda1: left column (pair 1,2), lowest y (alternate along y). X moved closer to center -->
-    <body name="panda1_link0" childclass="panda" pos="-0.45 -0.40 0" quat="0.9238795 0 0 0.3826834">
+    <body name="panda1_link0" childclass="panda" pos="-0.40 -0.40 0" quat="0.9238795 0 0 0.3826834">
 
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>

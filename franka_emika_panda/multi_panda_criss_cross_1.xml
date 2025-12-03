@@ -1,4 +1,4 @@
-<mujoco model="panda_four_bins">
+<mujoco model="multi panda">
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
 
   <option integrator="implicitfast"/>
@@ -126,49 +126,10 @@
   <worldbody>
     <light pos="0 0 2" mode="trackcom"/>
 
-    <!-- Work surface and bins lifted directly from panda_four_binpick MoveIt scene -->
-    <geom name="table" type="box" size="1 1 0.05" pos="0 0 0.05" rgba="0.7 0.7 0.7 0.4" friction="1 0.1 0.01"/>
+    <!-- Arranged as two facing pairs with a zipper offset and a central work strip -->
+    <!-- panda1: left column (pair 1,2), lowest y (alternate along y). X moved closer to center -->
+    <body name="panda1_link0" childclass="panda" pos="-0.30 -0.30 0" quat="0.9238795 0 0 0.3826834">
 
-    <!-- Helper macro from xacro expands into a bottom plate plus four sides; we mirror it explicitly here -->
-    <body name="box1" pos="0 0 0.11">
-      <geom name="box1_bottom" type="box" size="0.25 0.25 0.01" rgba="0 0 1 1"/>
-      <geom name="box1_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" rgba="0 0 1 1"/>
-      <geom name="box1_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" rgba="0 0 1 1"/>
-      <geom name="box1_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" rgba="0 0 1 1"/>
-      <geom name="box1_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" rgba="0 0 1 1"/>
-    </body>
-    <body name="box2" pos="0.5 0 0.11">
-      <geom name="box2_bottom" type="box" size="0.25 0.25 0.01" rgba="0 1 0 1"/>
-      <geom name="box2_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" rgba="0 1 0 1"/>
-      <geom name="box2_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" rgba="0 1 0 1"/>
-      <geom name="box2_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" rgba="0 1 0 1"/>
-      <geom name="box2_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" rgba="0 1 0 1"/>
-    </body>
-    <body name="box3" pos="-0.5 0 0.11">
-      <geom name="box3_bottom" type="box" size="0.25 0.25 0.01" rgba="1 0 0 1"/>
-      <geom name="box3_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" rgba="1 0 0 1"/>
-      <geom name="box3_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" rgba="1 0 0 1"/>
-      <geom name="box3_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" rgba="1 0 0 1"/>
-      <geom name="box3_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" rgba="1 0 0 1"/>
-    </body>
-    <body name="box4" pos="0 0.5 0.11">
-      <geom name="box4_bottom" type="box" size="0.25 0.25 0.01" rgba="1 1 0 1"/>
-      <geom name="box4_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" rgba="1 1 0 1"/>
-      <geom name="box4_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" rgba="1 1 0 1"/>
-      <geom name="box4_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" rgba="1 1 0 1"/>
-      <geom name="box4_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" rgba="1 1 0 1"/>
-    </body>
-    <body name="box5" pos="0 -0.5 0.11">
-      <geom name="box5_bottom" type="box" size="0.25 0.25 0.01" rgba="0.5 0 0.5 1"/>
-      <geom name="box5_front" type="box" size="0.25 0.01 0.25" pos="0 0.25 0.26" rgba="0.5 0 0.5 1"/>
-      <geom name="box5_back" type="box" size="0.25 0.01 0.25" pos="0 -0.25 0.26" rgba="0.5 0 0.5 1"/>
-      <geom name="box5_left" type="box" size="0.01 0.25 0.25" pos="-0.25 0 0.26" rgba="0.5 0 0.5 1"/>
-      <geom name="box5_right" type="box" size="0.01 0.25 0.25" pos="0.25 0 0.26" rgba="0.5 0 0.5 1"/>
-    </body>
-
-    <!-- Four Panda arms mounted on the corners of the central worktable -->
-    <!-- panda1: MoveIt arm_id_0 at (0.4, -0.4, 0.1) yaw 2.28 rad -->
-    <body name="panda1_link0" childclass="panda" pos="0.4 -0.4 0.1" quat="0.4175945 0 0 0.9086335">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -282,9 +243,6 @@
                         <geom class="fingertip_pad_collision_4"/>
                         <geom class="fingertip_pad_collision_5"/>
                       </body>
-                      <body name="panda1_rod" pos="0 0 0.1" quat="0.7071068 0 0.7071068 0">
-                        <geom name="panda1_rod_geom" type="cylinder" size="0.01 0.01" rgba="0 1 0 1"/>
-                      </body>
                     </body>
                   </body>
                 </body>
@@ -295,8 +253,8 @@
       </body>
     </body>
 
-    <!-- panda2: MoveIt arm_id_1 at (-0.4, -0.4, 0.1) yaw 0.66 rad -->
-    <body name="panda2_link0" childclass="panda" pos="-0.4 -0.4 0.1" quat="0.9460423 0 0 0.3240430">
+    <!-- panda2: left column (pair 1,2), higher y. X moved closer to center -->
+    <body name="panda2_link0" childclass="panda" pos="-0.30 0.30 0" quat="0.9238795 0 0 -0.3826834">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -410,9 +368,6 @@
                         <geom class="fingertip_pad_collision_4"/>
                         <geom class="fingertip_pad_collision_5"/>
                       </body>
-                      <body name="panda2_rod" pos="0 0 0.1" quat="0.7071068 0 0.7071068 0">
-                        <geom name="panda2_rod_geom" type="cylinder" size="0.01 0.01" rgba="1 0 0 1"/>
-                      </body>
                     </body>
                   </body>
                 </body>
@@ -423,8 +378,8 @@
       </body>
     </body>
 
-    <!-- panda3: MoveIt arm_id_2 at (-0.4, 0.4, 0.1) yaw -0.66 rad -->
-    <body name="panda3_link0" childclass="panda" pos="-0.4 0.4 0.1" quat="0.9460423 0 0 -0.3240430">
+    <!-- panda3: right column (pair 3,4), lower y (alternate along y). X moved closer to center -->
+    <body name="panda3_link0" childclass="panda" pos="0.30 -0.30 0" quat="0.3826834 0 0 0.9238795">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -538,9 +493,6 @@
                         <geom class="fingertip_pad_collision_4"/>
                         <geom class="fingertip_pad_collision_5"/>
                       </body>
-                      <body name="panda3_rod" pos="0 0 0.1" quat="0.7071068 0 0.7071068 0">
-                        <geom name="panda3_rod_geom" type="cylinder" size="0.01 0.01" rgba="0 0 1 1"/>
-                      </body>
                     </body>
                   </body>
                 </body>
@@ -551,8 +503,8 @@
       </body>
     </body>
 
-    <!-- panda4: MoveIt arm_id_3 at (0.4, 0.4, 0.1) yaw -2.28 rad -->
-    <body name="panda4_link0" childclass="panda" pos="0.4 0.4 0.1" quat="0.4175945 0 0 -0.9086335">
+    <!-- panda4: right column (pair 3,4), highest y. X moved closer to center -->
+    <body name="panda4_link0" childclass="panda" pos="0.30 0.30 0" quat="0.3826834 0 0 -0.9238795">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974" fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
       <geom mesh="link0_0" material="off_white" class="visual"/>
       <geom mesh="link0_1" material="black" class="visual"/>
@@ -665,9 +617,6 @@
                         <geom class="fingertip_pad_collision_3"/>
                         <geom class="fingertip_pad_collision_4"/>
                         <geom class="fingertip_pad_collision_5"/>
-                      </body>
-                      <body name="panda4_rod" pos="0 0 0.1" quat="0.7071068 0 0.7071068 0">
-                        <geom name="panda4_rod_geom" type="cylinder" size="0.01 0.01" rgba="1 1 0 1"/>
                       </body>
                     </body>
                   </body>

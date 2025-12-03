@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include "utils.h"
 #include "rrt_connect.h"
 #include <stdexcept>
@@ -130,6 +131,7 @@ int main()
 
     // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
     printf("Planning with RRT-Connect...\n");
+    auto t_start_plan = std::chrono::high_resolution_clock::now();
     // Run a simple RRT-Connect to get sparse waypoints, then densify them.
     vector<Node *> plan = rrtConnect(
         m,
@@ -139,7 +141,10 @@ int main()
         goal,
         20000, //max_iters
         0.6);//step_size
+    auto t_end_plan = std::chrono::high_resolution_clock::now();
     printf("Planning done. Sparse waypoints: %zu\n", plan.size());
+    double plan_seconds = std::chrono::duration<double>(t_end_plan - t_start_plan).count();
+    printf("Planning time: %.3f s\n", plan_seconds);
 
     auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
     printf("Dense trajectory steps: %zu\n", dense_plan.size());
