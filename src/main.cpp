@@ -15,6 +15,7 @@
 
 #include "cbs.h"
 #include "ecbs.h"
+#include "xecbs.h"
 #include "rrt_connect.h"
 #include "utils.h"
 
@@ -24,6 +25,7 @@ enum class PlannerType
 {
     CBS,
     ECBS,
+    XECBS,
     RRT
 };
 
@@ -375,6 +377,8 @@ static PlannerType parsePlanner(int argc, char **argv)
     string sel = from_cli.empty() ? from_env : from_cli;
     if (sel == "ecbs")
         return PlannerType::ECBS;
+    if (sel == "xecbs")
+        return PlannerType::XECBS;
     if (sel == "rrt" || sel == "rrt-connect" || sel == "rrtconnect")
         return PlannerType::RRT;
     return PlannerType::CBS; // default
@@ -488,12 +492,14 @@ int main(int argc, char **argv)
 
     // ----------------- PLANNER DISPATCH ----------------- //
     vector<Node *> plan;
-    if (planner_type == PlannerType::CBS || planner_type == PlannerType::ECBS)
+    if (planner_type == PlannerType::CBS || planner_type == PlannerType::ECBS || planner_type == PlannerType::XECBS)
     {
         if (planner_type == PlannerType::CBS)
             std::cout << "\n===== RUNNING CBS PLANNER =====\n";
-        else
+        else if (planner_type == PlannerType::ECBS)
             std::cout << "\n===== RUNNING ECBS PLANNER =====\n";
+        else
+            std::cout << "\n===== RUNNING XeCBS PLANNER =====\n";
 
         auto t_start_plan = std::chrono::high_resolution_clock::now();
 
@@ -502,9 +508,14 @@ int main(int argc, char **argv)
             CBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id);
             plan = planner.plan(start_poses, goal_poses);
         }
-        else
+        else if (planner_type == PlannerType::ECBS)
         {
             ECBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id, 1.5);
+            plan = planner.plan(start_poses, goal_poses);
+        }
+        else // XECBS
+        {
+            XeCBSPlanner planner(m, dq_max, dt, num_agents, dofs, body_to_arm, joint_id, 1.5);
             plan = planner.plan(start_poses, goal_poses);
         }
 
