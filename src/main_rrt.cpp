@@ -166,6 +166,9 @@ int main()
     
     auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
 
+    setAllArmsQpos(m, d, start_poses);
+    mj_forward(m, d);
+    
     // create window, make OpenGL context current, request v-sync
     GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
     glfwMakeContextCurrent(window);
