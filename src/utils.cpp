@@ -352,8 +352,8 @@ bool isSingleArmCollision(const vector<double> &joint_pos, mjModel *model, mjDat
         if (arm1 == arm && arm2 == arm)
             return true;
 
-        if ((arm1 == arm && b2 == world_body_id) ||
-            (arm2 == arm && b1 == world_body_id))
+        if ((arm1 == arm && arm2 == -1) ||
+            (arm2 == arm && arm1 == -1))
             return true;
     }
     return false;

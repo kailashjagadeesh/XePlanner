@@ -253,7 +253,7 @@ std::vector<SingleArmNode *> ECBSPlanner::get_successors(SingleArmNode *current)
     // start with just doing single arm motions
     std::vector<SingleArmNode *> successors;
     successors.push_back(new SingleArmNode(current->q, current->t + dt_));
-    double dq = 0.05; // 0.2 rads
+    double dq = 0.02; // 0.2 rads
     for (int j = 0; j < current->q.size(); j++)
     {
         SingleArmNode *successor = new SingleArmNode(current->q, current->t + dt_);
