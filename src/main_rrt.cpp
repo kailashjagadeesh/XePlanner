@@ -118,26 +118,7 @@ int main()
         mju_error("Could not initialize GLFW");
     }
 
-    // create window, make OpenGL context current, request v-sync
-    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetCursorPosCallback(window, mouse_move_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-
-    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
-
-    // initialize visualization data structures
-    mjv_defaultCamera(&cam);
-    configureCameraForModel(m, &cam);
-    mjv_defaultOption(&opt);
-    mjv_defaultScene(&scn);
-    mjr_defaultContext(&con);
-
-    // create scene and context
-    mjv_makeScene(m, &scn, 2000);
-    mjr_makeContext(m, &con, mjFONTSCALE_150);
+    
 
     vector<double> end_pose = {0.0, -2, 0.0, -1.2, 0.5, 1.0, -1};
 
@@ -180,9 +161,26 @@ int main()
     
     auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
 
-    setAllArmsQpos(m, d, start_poses);
-    mj_forward(m, d);
+    // create window, make OpenGL context current, request v-sync
+    GLFWwindow *window = glfwCreateWindow(1200, 1200, "Demo", NULL, NULL);
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, mouse_move_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
+    print_collisions = (std::getenv("MJ_PRINT_COLLISIONS") != nullptr);
+
+    // initialize visualization data structures
+    mjv_defaultCamera(&cam);
+    configureCameraForModel(m, &cam);
+    mjv_defaultOption(&opt);
+    mjv_defaultScene(&scn);
+    mjr_defaultContext(&con);
+
+    // create scene and context
+    mjv_makeScene(m, &scn, 2000);
+    mjr_makeContext(m, &con, mjFONTSCALE_150);
     while (!glfwWindowShouldClose(window))
     {
         mj_step1(m, d);

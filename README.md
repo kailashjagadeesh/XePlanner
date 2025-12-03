@@ -18,5 +18,11 @@ To run the planners, build the workspace and run
 ``` ./ECBSPlanner ``` for ECBS planner
 ``` ./RRTPlanner ``` for RRT-Connect planner
 
+2 new configs added:
+- multi_panda_criss_cross.xml
+- panda_four_bins.xml
+
+add these names in scene.xml. The start config for multi_panda_criss_cross.xml is in main_cbs.cpp
+
 Franka Panda Model Adapated From:
 https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_emika_panda
