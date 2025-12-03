@@ -29,13 +29,14 @@ enum class PlannerType
     RRT
 };
 
-static constexpr int kNumArms = 4;
+static constexpr int kDefaultArms = 4;
 
 struct SceneConfig
 {
     std::string scene_xml;
     std::vector<std::vector<double>> starts; // per-arm if size==num_agents, otherwise broadcast
     std::vector<std::vector<double>> goals;  // per-arm if size==num_agents, otherwise broadcast
+    int num_arms = kDefaultArms;
 };
 
 // -------------- GLOBALS / VISUALIZATION -------------- //
@@ -61,7 +62,6 @@ static const vector<double> HOME_POSE = {0.0, -0.785, 0.0, -2.356, 0.0, 1.57, 0.
 static const vector<double> UPRIGHT_POSE = {0.0, 0.0, 0.0, -1.0, 0.0, 2.0, 0.8};
 static const vector<double> ALT_POSE = {0.8, -1.5, 0.5, -1.5, 0.0, 2.0, -0.7};
 
-static const int num_actuators = 4;
 static const double dt = 0.01;
 static const double dq_max = 3.142; // rad / s
 
@@ -192,7 +192,8 @@ static bool startsWith(const std::string &s, const std::string &prefix)
 // Try to parse patterns like "start_config_3:" or any start/goal line with an index.
 static bool parseIndexedConfig(const std::string &line,
                                const std::string &tag,
-                               std::vector<std::vector<double>> &storage)
+                               std::vector<std::vector<double>> &storage,
+                               int &max_index_seen)
 {
     std::string lower = toLower(line);
     std::string ltag = toLower(tag);
@@ -206,15 +207,16 @@ static bool parseIndexedConfig(const std::string &line,
         return false;
 
     int idx = std::stoi(lower.substr(idx_pos));
-    if (idx < 1 || idx > kNumArms)
+    if (idx < 0)
         return false;
 
     auto cfg = parseConfigVector(line);
     if (!cfg.empty())
     {
-        if (static_cast<int>(storage.size()) < kNumArms)
-            storage.resize(kNumArms);
-        storage[idx - 1] = std::move(cfg);
+        if (static_cast<int>(storage.size()) <= idx)
+            storage.resize(idx + 1);
+        storage[idx] = std::move(cfg);
+        max_index_seen = std::max(max_index_seen, idx + 1);
         return true;
     }
     return false;
@@ -293,8 +295,10 @@ static SceneConfig loadSceneConfig(const std::filesystem::path &scene_file)
 {
     SceneConfig cfg;
     cfg.scene_xml = "franka_emika_panda/scene.xml";
-    cfg.starts.assign(kNumArms, {});
-    cfg.goals.assign(kNumArms, {});
+    cfg.starts.clear();
+    cfg.goals.clear();
+    cfg.num_arms = kDefaultArms;
+    int max_index_seen = 0;
     std::vector<double> broadcast_start;
     std::vector<double> broadcast_goal;
 
@@ -322,7 +326,7 @@ static SceneConfig loadSceneConfig(const std::filesystem::path &scene_file)
 
         if (startsWith(t, "start"))
         {
-            if (!parseIndexedConfig(t, "start_config_", cfg.starts))
+            if (!parseIndexedConfig(t, "start_config_", cfg.starts, max_index_seen))
             {
                 auto v = parseConfigVector(t);
                 if (!v.empty())
@@ -331,7 +335,7 @@ static SceneConfig loadSceneConfig(const std::filesystem::path &scene_file)
         }
         else if (startsWith(t, "goal"))
         {
-            if (!parseIndexedConfig(t, "goal_config_", cfg.goals))
+            if (!parseIndexedConfig(t, "goal_config_", cfg.goals, max_index_seen))
             {
                 auto v = parseConfigVector(t);
                 if (!v.empty())
@@ -340,13 +344,25 @@ static SceneConfig loadSceneConfig(const std::filesystem::path &scene_file)
         }
     }
 
+    // Determine arm count based on indexed entries or provided sizes
+    cfg.num_arms = std::max(cfg.num_arms, max_index_seen);
+    if (!cfg.starts.empty())
+        cfg.num_arms = std::max<int>(cfg.num_arms, static_cast<int>(cfg.starts.size()));
+    if (!cfg.goals.empty())
+        cfg.num_arms = std::max<int>(cfg.num_arms, static_cast<int>(cfg.goals.size()));
+    if (cfg.num_arms <= 0)
+        cfg.num_arms = kDefaultArms;
+
+    cfg.starts.resize(cfg.num_arms);
+    cfg.goals.resize(cfg.num_arms);
+
     // Fill missing entries with broadcast or defaults
-    for (int i = 0; i < kNumArms; ++i)
+    for (int i = 0; i < cfg.num_arms; ++i)
     {
         if (cfg.starts[i].empty())
             cfg.starts[i] = !broadcast_start.empty() ? broadcast_start : START_POSE;
     }
-    for (int i = 0; i < kNumArms; ++i)
+    for (int i = 0; i < cfg.num_arms; ++i)
     {
         if (cfg.goals[i].empty())
             cfg.goals[i] = !broadcast_goal.empty() ? broadcast_goal : HOME_POSE;
@@ -417,7 +433,7 @@ int main(int argc, char **argv)
     
     // ----------------- CONFIGURATION SETUP ----------------- //
 
-    const int num_agents = kNumArms;
+    const int num_agents = scene_cfg.num_arms;
     std::vector<std::vector<double>> start_poses = scene_cfg.starts.empty() ? std::vector<std::vector<double>>(num_agents, START_POSE) : scene_cfg.starts;
     std::vector<std::vector<double>> goal_poses = scene_cfg.goals.empty() ? std::vector<std::vector<double>>(num_agents, END_POSE_1) : scene_cfg.goals;
 
@@ -462,8 +478,8 @@ int main(int argc, char **argv)
     int dof = start_poses[0].size();
 
     // map arm, joint to location to control data index
-    vector<vector<int>> act_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm)
+    vector<vector<int>> act_id(num_agents, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_agents; ++arm)
     {
         for (int j = 0; j < dof; ++j)
         {
@@ -475,8 +491,8 @@ int main(int argc, char **argv)
             act_id[arm][j] = id;
         }
     }
-    vector<vector<int>> joint_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm)
+    vector<vector<int>> joint_id(num_agents, vector<int>(dof, -1));
+    for (int arm = 0; arm < num_agents; ++arm)
     {
         for (int j = 0; j < dof; ++j)
         {
@@ -488,7 +504,7 @@ int main(int argc, char **argv)
             joint_id[arm][j] = jid;
         }
     }
-    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
+    auto body_to_arm = bodyToArm(act_id, m, num_agents, dof);
 
     // ----------------- PLANNER DISPATCH ----------------- //
     vector<Node *> plan;
@@ -541,7 +557,7 @@ int main(int argc, char **argv)
         Node *goal = new Node(goal_poses, 0.0);
         plan = rrtConnect(
             m,
-            num_actuators,
+            num_agents,
             dof,
             start,
             goal,

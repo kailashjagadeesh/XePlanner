@@ -648,7 +648,7 @@ std::vector<Node *> XeCBSPlanner::plan(const std::vector<std::vector<double>> &s
                 return buildNodeTrajectory(node->paths);
             }
 
-            if (iter > 100)
+            if (iter > 1000)
             {
                 std::cout << "[XeCBS] Max iterations reached.\n";
                 break;
@@ -699,7 +699,7 @@ std::vector<Node *> XeCBSPlanner::plan(const std::vector<std::vector<double>> &s
             return buildNodeTrajectory(best_focal_node->paths);
         }
 
-        if (iter > 100)
+        if (iter > 1000)
         {
             std::cout << "[XeCBS] Max iterations reached.\n";
             break;
