@@ -177,44 +177,11 @@ int main()
             act_id[arm][j] = id;
         }
     }
-<<<<<<< HEAD:src/main.cpp
-    vector<vector<int>> joint_id(num_actuators, vector<int>(dof, -1));
-    for (int arm = 0; arm < num_actuators; ++arm) {
-        for (int j = 0; j < dof; ++j) {
-            char name[64];
-            snprintf(name, sizeof(name), "panda%d_joint%d", arm+1, j+1);
-            int jid = mj_name2id(m, mjOBJ_JOINT, name);
-            if (jid < 0) throw runtime_error("Could not find joint");
-            joint_id[arm][j] = jid;
-        }
-    }
-    auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
-
-    // ----------------- THIS IS WHERE PLANNER FUNCTION CALL SHOULD GO ----------------------- //
-    // INPUT: vector<Node*> -> dim(num_waypoints)
-    vector<double> end_pose  = {0.5, 0, 0.0, -1.2, 0.5, 1.0, -1};
-    vector<vector<double>> start_poses(num_actuators, start_pose);
-    vector<vector<double>> end_poses(num_actuators, end_pose);
-    Node* start = new Node(start_poses, 0);
-    Node* mid = new Node(end_poses, 1);
-    Node* mid_pause = new Node(end_poses, 2);
-    Node* end = new Node(start_poses, 3);
-    vector<Node*> plan = {start, mid, mid_pause, end};
-    // --------------------------------------------------------------------------------------- //
-
-
-    auto dense_plan = densifyPlan(plan, dt); // this function will densify the plan with linear interpolation to ensure that desired timesteps are followed
-
-    // set initial arm pose and gripper state
-    setArmsStartPose(m, d, start_pose);
-    setArmActuatorTargets(m, d, start_pose);
-    setGrippersOpen(m, d);
-    mj_forward(m, d);
-
-=======
     
     auto body_to_arm = bodyToArm(act_id, m, num_actuators, dof);
->>>>>>> kj_ecbs_dev:src/main_rrt.cpp
+
+    setAllArmsQpos(m, d, start_poses);
+    mj_forward(m, d);
 
     while (!glfwWindowShouldClose(window))
     {
