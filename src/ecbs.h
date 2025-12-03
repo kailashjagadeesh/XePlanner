@@ -99,7 +99,7 @@ struct SingleArmNodeEqual
 
         for (size_t i = 0; i < a->q.size(); ++i)
         {
-            if (a->q[i] != b->q[i])
+            if (std::abs(a->q[i] - b->q[i]) > 0.05) // this should match dq in get successors
                 return false;
         }
 
